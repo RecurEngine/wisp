@@ -139,7 +139,7 @@ npm run build
 ./scripts/release.sh
 ```
 
-脚本会读取 `manifest.json` 中的版本号，执行检查和生产构建，并将发布文件上传到 GitHub。
+脚本会读取 `manifest.json` 中的版本号，执行检查和生产构建，创建并推送 annotated Git tag，然后将发布文件上传到 GitHub。
 
 ## 当前限制
 

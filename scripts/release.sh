@@ -41,6 +41,27 @@ if gh release view "$VERSION" --repo "$REPO" >/dev/null 2>&1; then
   exit 1
 fi
 
+if git ls-remote --exit-code --refs origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+  echo "Remote tag $VERSION already exists on origin. Choose a new version or publish the existing tag manually." >&2
+  exit 1
+fi
+
+if git rev-parse --verify --quiet "refs/tags/$VERSION" >/dev/null; then
+  TAG_COMMIT="$(git rev-list -n 1 "$VERSION")"
+  HEAD_COMMIT="$(git rev-parse HEAD)"
+  if [[ "$TAG_COMMIT" != "$HEAD_COMMIT" ]]; then
+    echo "Local tag $VERSION does not point to HEAD. Refusing to release." >&2
+    exit 1
+  fi
+  echo "Using existing local tag $VERSION."
+else
+  echo "Creating annotated Git tag $VERSION..."
+  git tag -a "$VERSION" -m "Wisp $VERSION"
+fi
+
+echo "Pushing Git tag $VERSION..."
+git push origin "$VERSION"
+
 echo "Creating GitHub Release $VERSION on $REPO..."
 gh release create "$VERSION" main.js manifest.json styles.css \
   --repo "$REPO" \

@@ -137,7 +137,7 @@ To publish a release, commit and push the changes first, authenticate GitHub CLI
 ./scripts/release.sh
 ```
 
-The script reads the version from `manifest.json`, runs validation and the production build, and uploads the release assets to GitHub.
+The script reads the version from `manifest.json`, runs validation and the production build, creates and pushes an annotated Git tag, and uploads the release assets to GitHub.
 
 ## Current limitations
 
