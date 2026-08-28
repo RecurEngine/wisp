@@ -1,0 +1,12 @@
+node_modules/
+main.js
+styles.css
+data.json
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+.context/
+.cache/
+coverage/

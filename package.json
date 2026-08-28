@@ -1,0 +1,19 @@
+{
+  "name": "wisp-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A mobile-first AI agent plugin for Obsidian.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "obsidian": "1.13.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.4"
+  }
+}
