@@ -131,6 +131,14 @@ npm run build
 
 Also manually test on Obsidian Mobile and Desktop when changing runtime behavior. At minimum, verify one chat request, one vault read, one approved write, one voice transcription, one web search, and one failure/recovery path.
 
+To publish a release, commit and push the changes first, authenticate GitHub CLI with `gh auth login`, then run:
+
+```bash
+./scripts/release.sh
+```
+
+The script reads the version from `manifest.json`, runs validation and the production build, and uploads the release assets to GitHub.
+
 ## Current limitations
 
 - Search source cards and explicit source actions are planned but not yet implemented.

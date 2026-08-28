@@ -133,6 +133,14 @@ npm run build
 
 修改运行时行为后，还需要在 Obsidian Mobile 和 Desktop 手动验证。至少测试一次对话、Vault 读取、批准写入、语音转写、联网搜索和失败恢复。
 
+发布版本时，先提交并推送代码，然后执行 `gh auth login` 登录 GitHub，再运行：
+
+```bash
+./scripts/release.sh
+```
+
+脚本会读取 `manifest.json` 中的版本号，执行检查和生产构建，并将发布文件上传到 GitHub。
+
 ## 当前限制
 
 - 搜索来源卡片和显式来源操作仍在规划中。
