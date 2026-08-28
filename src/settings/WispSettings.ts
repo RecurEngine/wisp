@@ -176,7 +176,10 @@ export class WispSettingTab extends PluginSettingTab {
 
     const hero = containerEl.createDiv({ cls: "wisp-settings-hero" });
     const heroCopy = hero.createDiv({ cls: "wisp-settings-hero-copy" });
-    heroCopy.createEl("h2", { text: this.t("settings.title") });
+    new Setting(heroCopy)
+      .setName(this.t("settings.title"))
+      .setHeading()
+      .setClass("wisp-settings-hero-heading");
     heroCopy.createEl("p", { text: this.t("settings.intro") });
     hero.createSpan({ cls: "wisp-settings-byok", text: this.t("settings.byokBadge") });
     this.statusEl = containerEl.createDiv({ cls: "wisp-settings-status", text: this.t("settings.saved") });
@@ -370,7 +373,10 @@ export class WispSettingTab extends PluginSettingTab {
     const iconEl = header.createSpan({ cls: "wisp-settings-card-icon" });
     setIcon(iconEl, icon);
     const copy = header.createDiv({ cls: "wisp-settings-card-copy" });
-    copy.createEl("h3", { text: this.t(titleKey) });
+    new Setting(copy)
+      .setName(this.t(titleKey))
+      .setHeading()
+      .setClass("wisp-settings-card-heading");
     copy.createEl("p", { text: this.t(descriptionKey) });
     header.createSpan({ cls: `wisp-settings-card-status is-${statusKey.replace("settings.", "")}`, text: this.t(statusKey) });
     return header;

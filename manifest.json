@@ -3,7 +3,7 @@
   "name": "Wisp",
   "version": "1.0.0",
   "minAppVersion": "1.13.0",
-  "description": "A small intelligence that follows you everywhere, for managing your Obsidian vault.",
+  "description": "A small intelligence that follows you everywhere, for managing your vault.",
   "author": "RecurEngine",
   "isDesktopOnly": false
 }

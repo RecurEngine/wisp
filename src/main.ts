@@ -66,7 +66,7 @@ export default class WispPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "open-wisp",
+      id: "open",
       name: this.i18n.t("command.open"),
       callback: () => {
         void this.activateView();

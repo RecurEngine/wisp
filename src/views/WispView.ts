@@ -405,7 +405,7 @@ export class WispView extends ItemView {
       .addItem((item) => item
         .setTitle(this.t("view.clearHistory"))
         .setIcon("eraser")
-        .setDisabled(session.history.length === 0)
+        .setDisabled(!this.hasClearableHistory(session.id))
         .onClick(() => void this.clearSessionHistory(session.id)))
       .addItem((item) => item
         .setTitle(this.t("view.deleteSession"))
@@ -429,7 +429,7 @@ export class WispView extends ItemView {
     }
     const session = this.deps.sessionStore.list().find((candidate) => candidate.id === id);
     if (!session) return;
-    if (session.history.length === 0) {
+    if (!this.hasClearableHistory(id)) {
       new Notice(this.t("view.clearHistoryEmpty"));
       return;
     }
@@ -439,6 +439,14 @@ export class WispView extends ItemView {
     this.refreshSessionSelector();
     this.inputEl?.focus();
     new Notice(this.t("view.historyCleared"));
+  }
+
+  private hasClearableHistory(id: string): boolean {
+    const session = this.deps.sessionStore.list().find((candidate) => candidate.id === id);
+    if (!session) return false;
+    if (session.history.length > 0) return true;
+    if (id !== this.deps.sessionStore.active().id || !this.transcriptEl) return false;
+    return Boolean(this.transcriptEl.querySelector(".wisp-chat-message, .wisp-chat-error"));
   }
 
   private async renameSession(id: string): Promise<void> {
@@ -499,7 +507,8 @@ export class WispView extends ItemView {
     const loadingIndicator = this.appendLoadingIndicator(assistantBody);
     this.scrollToBottom();
     window.requestAnimationFrame(() => this.scrollToBottom());
-    const toolStatus = new Map<string, HTMLElement>();
+    let toolActivity: { readonly name: HTMLElement; readonly status: HTMLElement } | undefined;
+    let toolCallCount = 0;
     const controller = new AbortController();
     this.activeController = controller;
     this.setBusy(true);
@@ -519,21 +528,13 @@ export class WispView extends ItemView {
           assistantBody.appendText(event.text);
           this.scrollToBottom();
         } else if (event.type === "tool_call") {
-          const card = this.appendToolCard(event.name, event.arguments);
-          toolStatus.set(event.id, card);
+          toolActivity ??= this.appendToolActivity();
+          toolCallCount += 1;
+          toolActivity.name.setText(this.t("view.toolActivity", { count: String(toolCallCount) }));
+          toolActivity.status.setText(this.t("view.running"));
           this.scrollToBottom();
         } else if (event.type === "tool_result") {
-          const card = toolStatus.get(event.id);
-          if (card) {
-            card.setText(event.result.ok ? this.t("view.completed") : this.t("view.failed", { error: event.result.error }));
-            card.toggleClass("is-error", !event.result.ok);
-          }
-          if (!event.result.ok && this.deps.isDebugMode()) {
-            const details = typeof event.result.details === "string"
-              ? event.result.details
-              : JSON.stringify(event.result.details);
-            this.appendError(this.t("view.errorDetails", { name: event.name, error: event.result.error }), details);
-          }
+          toolActivity?.status.setText(this.t("view.completed"));
         } else if (event.type === "error") {
           requestFailed = true;
           assistantBody.removeClass("is-loading");
@@ -682,7 +683,7 @@ export class WispView extends ItemView {
   }
 
   private appendMessage(role: "user" | "assistant", text: string): HTMLElement {
-    if (!this.transcriptEl) return document.createElement("div");
+    if (!this.transcriptEl) return createDiv();
     const message = this.transcriptEl.createDiv({ cls: `wisp-chat-message is-${role}` });
     const meta = message.createDiv({ cls: "wisp-chat-message-meta", text: role === "user" ? this.t("view.you") : this.t("view.wisp") });
     meta.setAttr("aria-hidden", "true");
@@ -710,14 +711,13 @@ export class WispView extends ItemView {
     this.scrollToBottom();
   }
 
-  private appendToolCard(name: string, args: unknown): HTMLElement {
-    if (!this.transcriptEl) return document.createElement("span");
+  private appendToolActivity(): { readonly name: HTMLElement; readonly status: HTMLElement } {
+    if (!this.transcriptEl) return { name: createSpan(), status: createSpan() };
     const card = this.transcriptEl.createDiv({ cls: "wisp-chat-tool" });
     card.createSpan({ cls: "wisp-chat-tool-icon", text: "›" });
-    card.createSpan({ cls: "wisp-chat-tool-name", text: formatToolName(name) });
+    const name = card.createSpan({ cls: "wisp-chat-tool-name", text: this.t("view.toolActivity", { count: "0" }) });
     const status = card.createSpan({ cls: "wisp-chat-tool-status", text: this.t("view.running") });
-    card.createEl("pre", { cls: "wisp-chat-tool-args", text: compactArguments(args) });
-    return status;
+    return { name, status };
   }
 
   private appendError(message: string, details?: string): void {
@@ -789,11 +789,13 @@ export class WispView extends ItemView {
 
   private resizeInput(): void {
     if (!this.inputEl) return;
-    this.inputEl.style.height = "auto";
+    this.inputEl.setCssProps({ height: "auto" });
     const maxHeight = 140;
     const height = Math.min(Math.max(this.inputEl.scrollHeight, 40), maxHeight);
-    this.inputEl.style.height = `${height}px`;
-    this.inputEl.style.overflowY = this.inputEl.scrollHeight > maxHeight ? "auto" : "hidden";
+    this.inputEl.setCssProps({
+      height: `${height}px`,
+      "overflow-y": this.inputEl.scrollHeight > maxHeight ? "auto" : "hidden"
+    });
   }
 
   private startRecordingTimer(): void {
@@ -855,25 +857,15 @@ export class WispView extends ItemView {
   }
 }
 
-function formatToolName(name: string): string {
-  return name.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function compactArguments(args: unknown): string {
-  const value = JSON.stringify(args);
-  return value && value !== "{}" ? value : "";
-}
-
 async function copyError(value: string, i18n: I18n): Promise<void> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(value);
     } else {
-      const fallback = document.createElement("textarea");
+      const fallback = createEl("textarea", { cls: "wisp-clipboard-fallback" });
       fallback.value = value;
-      fallback.setAttribute("readonly", "true");
-      fallback.style.position = "fixed";
-      fallback.style.opacity = "0";
+      fallback.setAttr("readonly", "true");
+      fallback.setCssProps({ position: "fixed", opacity: "0" });
       document.body.appendChild(fallback);
       let copied = false;
       try {
