@@ -23,7 +23,7 @@ export class ToolApprovalModal extends Modal {
     contentEl.createEl("p", { text: this.i18n.t("modal.modifyVault", { tool: formatToolName(this.toolName) }) });
     contentEl.createEl("pre", { text: JSON.stringify(this.args, null, 2) });
 
-    const buttons = contentEl.createDiv({ cls: "wisp-mobile-approval-buttons" });
+    const buttons = contentEl.createDiv({ cls: "wisp-approval-buttons" });
     const cancelButton = buttons.createEl("button", { text: this.i18n.t("modal.cancel") });
     const approveButton = buttons.createEl("button", { cls: "mod-cta", text: this.i18n.t("modal.approve") });
     cancelButton.addEventListener("click", () => this.finish(false));

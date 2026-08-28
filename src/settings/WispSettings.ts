@@ -4,13 +4,13 @@ import type { WispVoiceProvider } from "../voice/VoiceProviderRegistry";
 import type { WebSearchProviderId } from "../websearch/WebSearchTypes";
 import { I18n, type WispLanguage } from "../i18n/I18n";
 
-const API_KEY_SECRET_ID = "wisp-mobile-api-key";
-const VOICE_API_KEY_SECRET_ID = "wisp-mobile-voice-api-key";
-const WEB_SEARCH_API_KEY_SECRET_ID = "wisp-mobile-web-search-api-key";
+const API_KEY_SECRET_ID = "wisp-api-key";
+const VOICE_API_KEY_SECRET_ID = "wisp-voice-api-key";
+const WEB_SEARCH_API_KEY_SECRET_ID = "wisp-web-search-api-key";
 
 export interface WispSettings {
   readonly language: WispLanguage;
-  readonly mobileLayout: WispMobileLayout;
+  readonly mobileLayout: WispLayout;
   readonly provider: WispProvider;
   readonly baseUrl: string;
   readonly model: string;
@@ -30,7 +30,7 @@ export interface WispSettings {
 }
 
 export type WispProvider = "claude" | "openai-compatible";
-export type WispMobileLayout = "side" | "fullscreen";
+export type WispLayout = "side" | "fullscreen";
 
 const VOICE_PROVIDER_DEFAULTS: Record<WispVoiceProvider, { readonly baseUrl: string; readonly model: string }> = {
   "openai-compatible": { baseUrl: "https://api.openai.com/v1", model: "gpt-transcribe" },
@@ -293,7 +293,7 @@ export class WispSettingTab extends PluginSettingTab {
             .addOption("side", this.t("settings.sidePanel"))
             .addOption("fullscreen", this.t("settings.fullscreen"))
             .setValue(draft.mobileLayout)
-            .onChange((value) => this.updateDraft({ mobileLayout: value as WispMobileLayout }))
+            .onChange((value) => this.updateDraft({ mobileLayout: value as WispLayout }))
         );
       new Setting(body)
         .setName(this.t("settings.debug"))
@@ -457,7 +457,7 @@ function readLanguage(value: unknown, fallback: WispLanguage): WispLanguage {
   return value === "auto" || value === "en" || value === "zh-CN" ? value : fallback;
 }
 
-function readMobileLayout(value: unknown, fallback: WispMobileLayout): WispMobileLayout {
+function readMobileLayout(value: unknown, fallback: WispLayout): WispLayout {
   return value === "side" || value === "fullscreen" ? value : fallback;
 }
 

@@ -2,7 +2,7 @@
 
 ## Decision
 
-Build Wisp as a separate Obsidian plugin project under `RecurEngine/wisp-mobile`, with mobile as the first runtime target and desktop as a compatibility target. Keep the existing technical id `wisp-mobile` for installation and data compatibility.
+Build Wisp as a separate Obsidian plugin project under `RecurEngine/wisp`, with mobile as the first runtime target and desktop as a compatibility target.
 
 ## Why a separate project
 

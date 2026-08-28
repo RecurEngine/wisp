@@ -12,9 +12,9 @@ import { SessionClearHistoryModal } from "./SessionClearHistoryModal";
 import { SessionDeleteModal } from "./SessionDeleteModal";
 import { SessionRenameModal } from "./SessionRenameModal";
 
-export const VIEW_TYPE_WISP_MOBILE = "wisp-mobile-view";
+export const VIEW_TYPE_WISP = "wisp-view";
 
-export interface WispMobileViewDeps {
+export interface WispViewDeps {
   readonly createRuntime: () => LiteAgentRuntime | null;
   readonly requestToolApproval: (toolName: string, args: unknown) => Promise<boolean>;
   readonly isDebugMode: () => boolean;
@@ -24,7 +24,7 @@ export interface WispMobileViewDeps {
   readonly i18n: I18n;
 }
 
-export class WispMobileView extends ItemView {
+export class WispView extends ItemView {
   private inputEl?: HTMLTextAreaElement;
   private transcriptEl?: HTMLElement;
   private statusEl?: HTMLElement;
@@ -54,12 +54,12 @@ export class WispMobileView extends ItemView {
   private dragStartX = 0;
   private suppressTabClickUntil = 0;
 
-  constructor(leaf: WorkspaceLeaf, private readonly deps: WispMobileViewDeps) {
+  constructor(leaf: WorkspaceLeaf, private readonly deps: WispViewDeps) {
     super(leaf);
   }
 
   getViewType(): string {
-    return VIEW_TYPE_WISP_MOBILE;
+    return VIEW_TYPE_WISP;
   }
 
   getDisplayText(): string {
@@ -73,12 +73,12 @@ export class WispMobileView extends ItemView {
   async onOpen(): Promise<void> {
     const container = this.containerEl.children[1];
     container.empty();
-    container.addClass("wisp-mobile-view");
-    container.toggleClass("wisp-mobile-device", Platform.isMobile);
-    container.toggleClass("wisp-mobile-side", Platform.isMobile && this.deps.mobileLayout === "side");
-    container.toggleClass("wisp-mobile-fullscreen", Platform.isMobile && this.deps.mobileLayout === "fullscreen");
+    container.addClass("wisp-view");
+    container.toggleClass("wisp-device", Platform.isMobile);
+    container.toggleClass("wisp-side", Platform.isMobile && this.deps.mobileLayout === "side");
+    container.toggleClass("wisp-fullscreen", Platform.isMobile && this.deps.mobileLayout === "fullscreen");
 
-    const shell = container.createDiv({ cls: "wisp-mobile-shell" });
+    const shell = container.createDiv({ cls: "wisp-shell" });
     const header = shell.createDiv({ cls: "wisp-chat-header" });
     const identity = header.createDiv({ cls: "wisp-chat-identity" });
     identity.createDiv({ cls: "wisp-chat-mark", text: "W" });

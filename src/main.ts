@@ -6,7 +6,7 @@ import { OpenAiCompatibleProvider } from "./providers/OpenAiCompatibleProvider";
 import { ClaudeProvider } from "./providers/ClaudeProvider";
 import { WispSettingTab, WispSettingsStore, type WispSettings } from "./settings/WispSettings";
 import { ToolApprovalModal } from "./views/ToolApprovalModal";
-import { VIEW_TYPE_WISP_MOBILE, WispMobileView } from "./views/WispMobileView";
+import { VIEW_TYPE_WISP, WispView } from "./views/WispView";
 import { createTranscriptionProvider } from "./voice/VoiceProviderRegistry";
 import type { TranscriptionProvider } from "./voice/VoiceTypes";
 import { SessionStore } from "./sessions/SessionStore";
@@ -14,7 +14,7 @@ import { createWebSearchProvider } from "./websearch/WebSearchProviderRegistry";
 import { createWebSearchTool } from "./websearch/WebSearchTool";
 import { I18n } from "./i18n/I18n";
 
-export default class WispMobilePlugin extends Plugin {
+export default class WispPlugin extends Plugin {
   private settingsStore!: WispSettingsStore;
   private wispSettings!: WispSettings;
   private vaultTools!: LiteAgentToolRegistry;
@@ -30,9 +30,9 @@ export default class WispMobilePlugin extends Plugin {
     this.vaultTools = createVaultToolRegistry(this.app);
 
     this.registerView(
-      VIEW_TYPE_WISP_MOBILE,
+      VIEW_TYPE_WISP,
       (leaf: WorkspaceLeaf) =>
-        new WispMobileView(leaf, {
+        new WispView(leaf, {
           createRuntime: () => this.createRuntime(),
           requestToolApproval: (toolName, args) => this.requestToolApproval(toolName, args),
           isDebugMode: () => this.wispSettings.debugMode,
@@ -61,7 +61,7 @@ export default class WispMobilePlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "open-wisp-mobile",
+      id: "open-wisp",
       name: this.i18n.t("command.open"),
       callback: () => {
         void this.activateView();
@@ -128,30 +128,30 @@ export default class WispMobilePlugin extends Plugin {
   }
 
   private async activateView(): Promise<void> {
-    const existingLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WISP_MOBILE);
+    const existingLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WISP);
     if (Platform.isMobile) {
       const existingLeaf = existingLeaves[0];
       if (this.wispSettings.mobileLayout === "fullscreen") {
-        const existingIsFullscreen = existingLeaf?.view.containerEl.hasClass("wisp-mobile-fullscreen") ?? false;
+        const existingIsFullscreen = existingLeaf?.view.containerEl.hasClass("wisp-fullscreen") ?? false;
         if (existingLeaf && existingIsFullscreen) {
           await this.app.workspace.revealLeaf(existingLeaf);
           return;
         }
 
         const fullscreenLeaf = this.app.workspace.getLeaf("tab");
-        await fullscreenLeaf.setViewState({ type: VIEW_TYPE_WISP_MOBILE, active: true });
+        await fullscreenLeaf.setViewState({ type: VIEW_TYPE_WISP, active: true });
         existingLeaf?.detach();
         await this.app.workspace.revealLeaf(fullscreenLeaf);
         return;
       }
 
-      const sideLeaf = await this.app.workspace.ensureSideLeaf(VIEW_TYPE_WISP_MOBILE, "right", {
+      const sideLeaf = await this.app.workspace.ensureSideLeaf(VIEW_TYPE_WISP, "right", {
         active: true,
         split: true,
         reveal: true
       });
       if (sideLeaf !== existingLeaf) {
-        await sideLeaf.setViewState({ type: VIEW_TYPE_WISP_MOBILE, active: true });
+        await sideLeaf.setViewState({ type: VIEW_TYPE_WISP, active: true });
         existingLeaf?.detach();
       }
       await this.app.workspace.revealLeaf(sideLeaf);
@@ -164,7 +164,7 @@ export default class WispMobilePlugin extends Plugin {
     }
 
     const leaf = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf("tab");
-    await leaf.setViewState({ type: VIEW_TYPE_WISP_MOBILE, active: true });
+    await leaf.setViewState({ type: VIEW_TYPE_WISP, active: true });
     await this.app.workspace.revealLeaf(leaf);
   }
 }

@@ -49,7 +49,7 @@ Obsidian 是很多人沉淀和发展个人知识的地方，但用户会在手�
 
 ```bash
 git clone <repository-url>
-cd wisp-mobile
+cd wisp
 npm install
 npm run build
 ```
@@ -57,7 +57,7 @@ npm run build
 将生成的 `main.js`、`manifest.json` 和 `styles.css` 复制到：
 
 ```text
-<你的 Vault>/.obsidian/plugins/wisp-mobile/
+<你的 Vault>/.obsidian/plugins/wisp/
 ```
 
 然后在 **设置 → 社区插件** 中启用 **Wisp**。`main.js` 和 `styles.css` 是由 `npm run build` 生成的发布产物，已被 Git 忽略。

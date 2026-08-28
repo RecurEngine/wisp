@@ -47,7 +47,7 @@ Wisp is currently installed from source while the project is prepared for commun
 
 ```bash
 git clone <repository-url>
-cd wisp-mobile
+cd wisp
 npm install
 npm run build
 ```
@@ -55,7 +55,7 @@ npm run build
 Copy the generated `main.js`, `manifest.json`, and `styles.css` into:
 
 ```text
-<your-vault>/.obsidian/plugins/wisp-mobile/
+<your-vault>/.obsidian/plugins/wisp/
 ```
 
 Then enable **Wisp** in **Settings → Community plugins**. The generated `main.js` and `styles.css` are intentionally ignored by Git; they are release artifacts produced by `npm run build`.

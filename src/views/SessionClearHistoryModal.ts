@@ -21,7 +21,7 @@ export class SessionClearHistoryModal extends Modal {
     contentEl.empty();
     contentEl.createEl("h2", { text: this.i18n.t("view.clearHistory") });
     contentEl.createEl("p", { text: this.i18n.t("view.clearHistoryConfirm", { title: this.title }) });
-    const buttons = contentEl.createDiv({ cls: "wisp-mobile-approval-buttons" });
+    const buttons = contentEl.createDiv({ cls: "wisp-approval-buttons" });
     const cancelButton = buttons.createEl("button", { text: this.i18n.t("modal.cancel") });
     const clearButton = buttons.createEl("button", { cls: "mod-warning", text: this.i18n.t("view.clearHistory") });
     cancelButton.addEventListener("click", () => this.finish(false));

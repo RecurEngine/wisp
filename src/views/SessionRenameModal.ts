@@ -35,7 +35,7 @@ export class SessionRenameModal extends Modal {
         });
       });
 
-    const buttons = contentEl.createDiv({ cls: "wisp-mobile-approval-buttons" });
+    const buttons = contentEl.createDiv({ cls: "wisp-approval-buttons" });
     const cancelButton = buttons.createEl("button", { text: this.i18n.t("modal.cancel") });
     const saveButton = buttons.createEl("button", { cls: "mod-cta", text: this.i18n.t("view.saveRename") });
     cancelButton.addEventListener("click", () => this.finish(null));

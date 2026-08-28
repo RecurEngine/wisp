@@ -4,7 +4,7 @@ This roadmap follows the mobile-first constraint: every milestone must work in O
 
 ## Completed
 
-- [x] Create a standalone Wisp Obsidian plugin (technical id: `wisp-mobile`).
+- [x] Create a standalone Wisp Obsidian plugin.
 - [x] Add Claude Messages API and OpenAI-compatible streaming providers.
 - [x] Add the LiteAgent tool loop, cancellation, write approval, and debug diagnostics.
 - [x] Add the core Obsidian vault operations for read, search, open, metadata, links, recent notes, create, append, update, and exact-match edit.
