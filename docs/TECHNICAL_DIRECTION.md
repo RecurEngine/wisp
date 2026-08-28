@@ -58,6 +58,7 @@ Completed:
 - Web Search option B with Tavily and Brave adapters using Obsidian `requestUrl`, independent SecretStorage credentials, bounded results, and a read-only `search_web` tool.
 - English and Simplified Chinese UI translations with an automatic device-language mode.
 - BYOK settings reorganized into Chat, Voice, Web Search, and Privacy & Diagnostics cards.
+- Configurable mobile display layout: side pane or fullscreen, with the mobile toolbar inset reserved only for fullscreen.
 
 Not yet complete:
 

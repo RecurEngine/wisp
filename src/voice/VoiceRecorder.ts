@@ -9,17 +9,23 @@ export class VoiceRecorder {
   private recorder?: MediaRecorder;
   private stream?: MediaStream;
   private chunks: Blob[] = [];
+  private audioContext?: AudioContext;
+  private audioSource?: MediaStreamAudioSourceNode;
+  private analyser?: AnalyserNode;
+  private levelAnimationFrame?: number;
 
   get isRecording(): boolean {
     return this.recorder?.state === "recording";
   }
 
-  async start(): Promise<void> {
+  async start(options: { readonly onLevel?: (level: number) => void } = {}): Promise<void> {
     if (this.isRecording) return;
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone access is not available in this app");
     if (typeof MediaRecorder === "undefined") throw new Error("Audio recording is not supported on this device");
 
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
     this.chunks = [];
     try {
       const mimeType = selectRecordingMimeType();
@@ -28,6 +34,7 @@ export class VoiceRecorder {
         if (event.data.size > 0) this.chunks.push(event.data);
       };
       this.recorder.start();
+      if (options.onLevel) this.startLevelMonitoring(options.onLevel);
     } catch (error) {
       this.release();
       throw error;
@@ -63,10 +70,48 @@ export class VoiceRecorder {
   }
 
   private release(): void {
+    this.stopLevelMonitoring();
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = undefined;
     this.recorder = undefined;
     this.chunks = [];
+  }
+
+  private startLevelMonitoring(onLevel: (level: number) => void): void {
+    if (!this.stream || typeof AudioContext === "undefined") return;
+    try {
+      this.audioContext = new AudioContext();
+      void this.audioContext.resume().catch(() => undefined);
+      this.analyser = this.audioContext.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.audioSource = this.audioContext.createMediaStreamSource(this.stream);
+      this.audioSource.connect(this.analyser);
+      const samples = new Uint8Array(this.analyser.fftSize);
+      const update = () => {
+        if (!this.analyser || !this.isRecording) return;
+        this.analyser.getByteTimeDomainData(samples);
+        let total = 0;
+        for (const sample of samples) {
+          const normalized = (sample - 128) / 128;
+          total += normalized * normalized;
+        }
+        onLevel(Math.min(1, Math.sqrt(total / samples.length) * 2));
+        this.levelAnimationFrame = window.requestAnimationFrame(update);
+      };
+      update();
+    } catch {
+      this.stopLevelMonitoring();
+    }
+  }
+
+  private stopLevelMonitoring(): void {
+    if (this.levelAnimationFrame !== undefined) window.cancelAnimationFrame(this.levelAnimationFrame);
+    this.levelAnimationFrame = undefined;
+    this.audioSource?.disconnect();
+    this.audioSource = undefined;
+    this.analyser = undefined;
+    if (this.audioContext) void this.audioContext.close().catch(() => undefined);
+    this.audioContext = undefined;
   }
 }
 

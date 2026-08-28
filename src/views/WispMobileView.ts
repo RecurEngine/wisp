@@ -1,9 +1,10 @@
-import { ItemView, Menu, Notice, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownRenderer, Menu, Notice, Platform, setIcon, WorkspaceLeaf } from "obsidian";
 import type { LiteAgentMessage } from "../core/LiteAgentTypes";
 import type { LiteAgentRuntime } from "../core/LiteAgentRuntime";
 import { formatDebugError, getUserFacingError } from "../core/DebugInfo";
 import { insertTranscript } from "./ComposerInput";
 import { VoiceRecorder } from "../voice/VoiceRecorder";
+import { VoiceActivityDetector } from "../voice/VoiceActivityDetector";
 import type { TranscriptionProvider } from "../voice/VoiceTypes";
 import type { SessionStore } from "../sessions/SessionStore";
 import { I18n, type TranslationKey } from "../i18n/I18n";
@@ -17,6 +18,7 @@ export interface WispMobileViewDeps {
   readonly createRuntime: () => LiteAgentRuntime | null;
   readonly requestToolApproval: (toolName: string, args: unknown) => Promise<boolean>;
   readonly isDebugMode: () => boolean;
+  readonly mobileLayout: "side" | "fullscreen";
   readonly createTranscriptionProvider: () => TranscriptionProvider | null;
   readonly sessionStore: SessionStore;
   readonly i18n: I18n;
@@ -29,15 +31,20 @@ export class WispMobileView extends ItemView {
   private sendButtonEl?: HTMLButtonElement;
   private stopButtonEl?: HTMLButtonElement;
   private micButtonEl?: HTMLButtonElement;
+  private realtimeMicButtonEl?: HTMLButtonElement;
   private cancelRecordingButtonEl?: HTMLButtonElement;
   private recordingStatusEl?: HTMLElement;
   private activeController?: AbortController;
   private recordingTimer?: number;
+  private recordingTimeout?: number;
   private recordingStartedAt?: number;
   private composerBoxEl?: HTMLElement;
   private voiceCaptureEl?: HTMLElement;
   private readonly voiceRecorder = new VoiceRecorder();
+  private voiceActivityDetector?: VoiceActivityDetector;
   private transcribing = false;
+  private finishingRecording = false;
+  private recordingMode?: "manual" | "realtime";
   private history: LiteAgentMessage[] = [];
   private sessionTabsEl?: HTMLElement;
   private draggedTab?: HTMLElement;
@@ -67,6 +74,9 @@ export class WispMobileView extends ItemView {
     const container = this.containerEl.children[1];
     container.empty();
     container.addClass("wisp-mobile-view");
+    container.toggleClass("wisp-mobile-device", Platform.isMobile);
+    container.toggleClass("wisp-mobile-side", Platform.isMobile && this.deps.mobileLayout === "side");
+    container.toggleClass("wisp-mobile-fullscreen", Platform.isMobile && this.deps.mobileLayout === "fullscreen");
 
     const shell = container.createDiv({ cls: "wisp-mobile-shell" });
     const header = shell.createDiv({ cls: "wisp-chat-header" });
@@ -118,6 +128,11 @@ export class WispMobileView extends ItemView {
       attr: { type: "button", "aria-label": this.t("view.record"), title: this.t("view.record") }
     });
     setIcon(micButton, "mic");
+    const realtimeMicButton = actions.createEl("button", {
+      cls: "wisp-chat-icon-button wisp-chat-realtime-mic",
+      attr: { type: "button", "aria-label": this.t("view.realtimeRecord"), title: this.t("view.realtimeRecord") }
+    });
+    setIcon(realtimeMicButton, "audio-waveform");
     const cancelRecordingButton = actions.createEl("button", {
       cls: "wisp-chat-icon-button wisp-chat-cancel-recording",
       attr: { type: "button", "aria-label": this.t("view.cancelRecording"), title: this.t("view.cancelRecording") }
@@ -135,6 +150,7 @@ export class WispMobileView extends ItemView {
     setIcon(sendButton, "arrow-up");
     this.stopButtonEl = stopButton;
     this.micButtonEl = micButton;
+    this.realtimeMicButtonEl = realtimeMicButton;
     this.cancelRecordingButtonEl = cancelRecordingButton;
     this.sendButtonEl = sendButton;
     stopButton.disabled = true;
@@ -143,6 +159,7 @@ export class WispMobileView extends ItemView {
     this.registerDomEvent(sendButton, "click", () => void this.submit());
     this.registerDomEvent(stopButton, "click", () => this.stop());
     this.registerDomEvent(micButton, "click", () => void this.toggleRecording());
+    this.registerDomEvent(realtimeMicButton, "click", () => void this.toggleRealtimeRecording());
     this.registerDomEvent(cancelRecordingButton, "click", () => this.cancelRecording());
     this.registerDomEvent(inputEl, "input", () => {
       this.resizeInput();
@@ -167,6 +184,7 @@ export class WispMobileView extends ItemView {
     this.sendButtonEl = undefined;
     this.stopButtonEl = undefined;
     this.micButtonEl = undefined;
+    this.realtimeMicButtonEl = undefined;
     this.cancelRecordingButtonEl = undefined;
     this.recordingStatusEl = undefined;
     this.composerBoxEl = undefined;
@@ -328,7 +346,8 @@ export class WispMobileView extends ItemView {
       return;
     }
     for (const message of this.history) {
-      if (message.role === "user" || message.role === "assistant") this.appendMessage(message.role, message.content);
+      if (message.role === "user") this.appendMessage(message.role, message.content);
+      if (message.role === "assistant") void this.renderAssistantMarkdown(this.appendMessage(message.role, message.content), message.content);
     }
     this.scrollToBottom();
   }
@@ -524,6 +543,7 @@ export class WispMobileView extends ItemView {
         }
       }
       if (!controller.signal.aborted && !requestFailed) {
+        await this.renderAssistantMarkdown(assistantBody, answer);
         this.history.push({ role: "user", content: input }, { role: "assistant", content: answer });
         await this.deps.sessionStore.updateHistory(sessionId, this.history);
         this.refreshSessionSelector();
@@ -548,9 +568,9 @@ export class WispMobileView extends ItemView {
   }
 
   private async toggleRecording(): Promise<void> {
-    if (this.activeController || this.transcribing) return;
+    if (this.activeController || this.transcribing || this.finishingRecording) return;
     if (this.voiceRecorder.isRecording) {
-      await this.finishRecording();
+      if (this.recordingMode === "manual") await this.finishRecording(false);
       return;
     }
 
@@ -560,20 +580,64 @@ export class WispMobileView extends ItemView {
     }
 
     try {
+      this.recordingMode = "manual";
       await this.voiceRecorder.start();
       this.setRecording(true);
     } catch (error) {
+      this.recordingMode = undefined;
+      this.voiceActivityDetector = undefined;
       const message = this.t("view.microphoneUnavailable", { error: error instanceof Error ? error.message : "permission was denied" });
       new Notice(message);
       if (this.deps.isDebugMode()) this.appendError(message, error instanceof Error ? error.stack : undefined);
     }
   }
 
-  private async finishRecording(): Promise<void> {
+  private async toggleRealtimeRecording(): Promise<void> {
+    if (this.activeController || this.transcribing || this.finishingRecording) return;
+    if (this.voiceRecorder.isRecording) {
+      if (this.recordingMode === "realtime") await this.finishRecording(true);
+      return;
+    }
+
+    if (!this.deps.createTranscriptionProvider()) {
+      new Notice(this.t("view.configureVoice"));
+      return;
+    }
+
+    try {
+      const detector = new VoiceActivityDetector();
+      this.recordingMode = "realtime";
+      await this.voiceRecorder.start({ onLevel: (level) => this.handleVoiceLevel(level) });
+      detector.start(Date.now());
+      this.voiceActivityDetector = detector;
+      this.setRecording(true);
+    } catch (error) {
+      this.recordingMode = undefined;
+      this.voiceActivityDetector = undefined;
+      const message = this.t("view.microphoneUnavailable", { error: error instanceof Error ? error.message : "permission was denied" });
+      new Notice(message);
+      if (this.deps.isDebugMode()) this.appendError(message, error instanceof Error ? error.stack : undefined);
+    }
+  }
+
+  private handleVoiceLevel(level: number): void {
+    const state = this.voiceActivityDetector?.update(level, Date.now());
+    this.voiceCaptureEl?.toggleClass("is-speaking", state === "speaking");
+    if (state === "finished") {
+      this.voiceActivityDetector = undefined;
+      void this.finishRecording(true);
+    }
+  }
+
+  private async finishRecording(autoSubmit: boolean): Promise<void> {
+    if (this.finishingRecording || !this.voiceRecorder.isRecording) return;
+    this.finishingRecording = true;
+    this.voiceActivityDetector = undefined;
     this.setRecording(false);
     this.transcribing = true;
     this.updateMicState();
     this.setStatus(this.t("view.transcribing"), true);
+    let shouldSubmit = false;
     try {
       const provider = this.deps.createTranscriptionProvider();
       if (!provider) {
@@ -593,8 +657,11 @@ export class WispMobileView extends ItemView {
       this.inputEl.value = insertTranscript(existingValue, transcript, selectionStart, selectionEnd);
       this.resizeInput();
       this.updateInputState();
-      this.inputEl.focus();
-      new Notice(this.t("view.transcribed"));
+      shouldSubmit = autoSubmit;
+      if (!autoSubmit) {
+        this.inputEl.focus();
+        new Notice(this.t("view.transcribed"));
+      }
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : "unknown error";
       const message = /\b401\b|authentication|api key/i.test(rawMessage)
@@ -608,6 +675,9 @@ export class WispMobileView extends ItemView {
       this.setStatus(this.t("view.ready"), false);
       this.updateMicState();
       this.updateInputState();
+      this.finishingRecording = false;
+      this.recordingMode = undefined;
+      if (shouldSubmit) void this.submit();
     }
   }
 
@@ -627,6 +697,17 @@ export class WispMobileView extends ItemView {
     });
     for (let index = 0; index < 3; index += 1) indicator.createSpan({ cls: "wisp-chat-loading-dot" });
     return indicator;
+  }
+
+  private async renderAssistantMarkdown(body: HTMLElement, markdown: string): Promise<void> {
+    body.empty();
+    body.addClass("is-markdown");
+    try {
+      await MarkdownRenderer.render(this.app, markdown, body, "", this);
+    } catch {
+      body.setText(markdown);
+    }
+    this.scrollToBottom();
   }
 
   private appendToolCard(name: string, args: unknown): HTMLElement {
@@ -663,25 +744,37 @@ export class WispMobileView extends ItemView {
   }
 
   private setRecording(recording: boolean): void {
+    const mode = this.recordingMode;
     this.composerBoxEl?.toggleClass("is-recording", recording);
     this.voiceCaptureEl?.toggleClass("is-visible", recording);
     if (this.micButtonEl) {
-      setIcon(this.micButtonEl, recording ? "square" : "mic");
-      this.micButtonEl.toggleClass("is-recording", recording);
-      this.micButtonEl.setAttr("aria-label", recording ? this.t("view.finishRecording") : this.t("view.record"));
-      this.micButtonEl.setAttr("title", recording ? this.t("view.finishRecording") : this.t("view.record"));
+      const isManualRecording = recording && mode === "manual";
+      setIcon(this.micButtonEl, isManualRecording ? "square" : "mic");
+      this.micButtonEl.toggleClass("is-recording", isManualRecording);
+      this.micButtonEl.setAttr("aria-label", isManualRecording ? this.t("view.finishRecording") : this.t("view.record"));
+      this.micButtonEl.setAttr("title", isManualRecording ? this.t("view.finishRecording") : this.t("view.record"));
+    }
+    if (this.realtimeMicButtonEl) {
+      const isRealtimeRecording = recording && mode === "realtime";
+      setIcon(this.realtimeMicButtonEl, isRealtimeRecording ? "square" : "audio-waveform");
+      this.realtimeMicButtonEl.toggleClass("is-recording", isRealtimeRecording);
+      this.realtimeMicButtonEl.setAttr("aria-label", isRealtimeRecording ? this.t("view.finishRealtimeRecording") : this.t("view.realtimeRecord"));
+      this.realtimeMicButtonEl.setAttr("title", isRealtimeRecording ? this.t("view.finishRealtimeRecording") : this.t("view.realtimeRecord"));
     }
     this.recordingStatusEl?.toggleClass("is-visible", recording);
     this.cancelRecordingButtonEl?.toggleClass("is-visible", recording);
     if (this.cancelRecordingButtonEl) this.cancelRecordingButtonEl.disabled = !recording;
     if (recording) this.startRecordingTimer();
     else this.clearRecordingTimer();
+    this.updateMicState();
     this.updateInputState();
     if (this.statusEl) this.setStatus(recording ? this.t("view.listening") : this.t("view.ready"), recording);
   }
 
   private updateMicState(): void {
-    if (this.micButtonEl) this.micButtonEl.disabled = Boolean(this.activeController) || this.transcribing;
+    const blocked = Boolean(this.activeController) || this.transcribing;
+    if (this.micButtonEl) this.micButtonEl.disabled = blocked || (this.voiceRecorder.isRecording && this.recordingMode !== "manual");
+    if (this.realtimeMicButtonEl) this.realtimeMicButtonEl.disabled = blocked || (this.voiceRecorder.isRecording && this.recordingMode !== "realtime");
   }
 
   private updateInputState(): void {
@@ -708,6 +801,7 @@ export class WispMobileView extends ItemView {
     this.recordingStartedAt = Date.now();
     this.updateRecordingStatus();
     this.recordingTimer = window.setInterval(() => this.updateRecordingStatus(), 1000);
+    this.recordingTimeout = window.setTimeout(() => void this.finishRecording(this.recordingMode === "realtime"), 60_000);
   }
 
   private updateRecordingStatus(): void {
@@ -720,7 +814,9 @@ export class WispMobileView extends ItemView {
 
   private clearRecordingTimer(): void {
     if (this.recordingTimer !== undefined) window.clearInterval(this.recordingTimer);
+    if (this.recordingTimeout !== undefined) window.clearTimeout(this.recordingTimeout);
     this.recordingTimer = undefined;
+    this.recordingTimeout = undefined;
     this.recordingStartedAt = undefined;
     this.recordingStatusEl?.setText(this.t("view.listeningTimer", { time: "00:00" }));
   }
@@ -728,7 +824,9 @@ export class WispMobileView extends ItemView {
   private cancelRecording(): void {
     if (!this.voiceRecorder.isRecording) return;
     this.voiceRecorder.cancel();
+    this.voiceActivityDetector = undefined;
     this.setRecording(false);
+    this.recordingMode = undefined;
     new Notice(this.t("view.recordingCancelled"));
   }
 

@@ -36,6 +36,7 @@ export default class WispMobilePlugin extends Plugin {
           createRuntime: () => this.createRuntime(),
           requestToolApproval: (toolName, args) => this.requestToolApproval(toolName, args),
           isDebugMode: () => this.wispSettings.debugMode,
+          mobileLayout: this.wispSettings.mobileLayout,
           createTranscriptionProvider: () => this.createTranscriptionProvider(),
           sessionStore: this.sessionStore,
           i18n: this.i18n
@@ -128,15 +129,41 @@ export default class WispMobilePlugin extends Plugin {
 
   private async activateView(): Promise<void> {
     const existingLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WISP_MOBILE);
+    if (Platform.isMobile) {
+      const existingLeaf = existingLeaves[0];
+      if (this.wispSettings.mobileLayout === "fullscreen") {
+        const existingIsFullscreen = existingLeaf?.view.containerEl.hasClass("wisp-mobile-fullscreen") ?? false;
+        if (existingLeaf && existingIsFullscreen) {
+          await this.app.workspace.revealLeaf(existingLeaf);
+          return;
+        }
+
+        const fullscreenLeaf = this.app.workspace.getLeaf("tab");
+        await fullscreenLeaf.setViewState({ type: VIEW_TYPE_WISP_MOBILE, active: true });
+        existingLeaf?.detach();
+        await this.app.workspace.revealLeaf(fullscreenLeaf);
+        return;
+      }
+
+      const sideLeaf = await this.app.workspace.ensureSideLeaf(VIEW_TYPE_WISP_MOBILE, "right", {
+        active: true,
+        split: true,
+        reveal: true
+      });
+      if (sideLeaf !== existingLeaf) {
+        await sideLeaf.setViewState({ type: VIEW_TYPE_WISP_MOBILE, active: true });
+        existingLeaf?.detach();
+      }
+      await this.app.workspace.revealLeaf(sideLeaf);
+      return;
+    }
+
     if (existingLeaves.length > 0) {
       await this.app.workspace.revealLeaf(existingLeaves[0]);
       return;
     }
 
-    const leaf = Platform.isMobile
-      ? this.app.workspace.getLeaf("tab")
-      : this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf("tab");
-
+    const leaf = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf("tab");
     await leaf.setViewState({ type: VIEW_TYPE_WISP_MOBILE, active: true });
     await this.app.workspace.revealLeaf(leaf);
   }

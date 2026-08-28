@@ -10,6 +10,7 @@ const WEB_SEARCH_API_KEY_SECRET_ID = "wisp-mobile-web-search-api-key";
 
 export interface WispSettings {
   readonly language: WispLanguage;
+  readonly mobileLayout: WispMobileLayout;
   readonly provider: WispProvider;
   readonly baseUrl: string;
   readonly model: string;
@@ -29,6 +30,7 @@ export interface WispSettings {
 }
 
 export type WispProvider = "claude" | "openai-compatible";
+export type WispMobileLayout = "side" | "fullscreen";
 
 const VOICE_PROVIDER_DEFAULTS: Record<WispVoiceProvider, { readonly baseUrl: string; readonly model: string }> = {
   "openai-compatible": { baseUrl: "https://api.openai.com/v1", model: "gpt-transcribe" },
@@ -43,6 +45,7 @@ const WEB_SEARCH_PROVIDER_DEFAULTS: Record<WebSearchProviderId, { readonly baseU
 
 interface PersistedWispSettings {
   readonly language?: unknown;
+  readonly mobileLayout?: unknown;
   readonly provider?: unknown;
   readonly baseUrl?: unknown;
   readonly model?: unknown;
@@ -60,6 +63,7 @@ interface PersistedWispSettings {
 
 export const DEFAULT_WISP_SETTINGS: WispSettings = {
   language: "auto",
+  mobileLayout: "side",
   provider: "claude",
   baseUrl: "https://api.anthropic.com",
   model: "claude-sonnet-4-20250514",
@@ -86,6 +90,7 @@ export class WispSettingsStore {
     const provider = readProvider(persisted?.provider, inferProviderFromBaseUrl(persisted?.baseUrl));
     return {
       language: readLanguage(persisted?.language, DEFAULT_WISP_SETTINGS.language),
+      mobileLayout: readMobileLayout(persisted?.mobileLayout, DEFAULT_WISP_SETTINGS.mobileLayout),
       provider,
       baseUrl: readString(persisted?.baseUrl, provider === "claude" ? DEFAULT_WISP_SETTINGS.baseUrl : "https://api.openai.com/v1"),
       model: readString(persisted?.model, provider === "claude" ? DEFAULT_WISP_SETTINGS.model : "gpt-4o-mini"),
@@ -118,6 +123,7 @@ export class WispSettingsStore {
       systemPrompt: settings.systemPrompt,
       debugMode: settings.debugMode,
       language: settings.language,
+      mobileLayout: settings.mobileLayout,
       voiceEnabled: settings.voiceEnabled,
       webSearchEnabled: settings.webSearchEnabled,
       webSearchProvider: settings.webSearchProvider,
@@ -280,6 +286,16 @@ export class WispSettingTab extends PluginSettingTab {
 
     this.renderCard(containerEl, "shield-check", "settings.privacyTitle", "settings.privacyDesc", "settings.ready", (body) => {
       new Setting(body)
+        .setName(this.t("settings.mobileLayout"))
+        .setDesc(this.t("settings.mobileLayoutDesc"))
+        .addDropdown((dropdown) =>
+          dropdown
+            .addOption("side", this.t("settings.sidePanel"))
+            .addOption("fullscreen", this.t("settings.fullscreen"))
+            .setValue(draft.mobileLayout)
+            .onChange((value) => this.updateDraft({ mobileLayout: value as WispMobileLayout }))
+        );
+      new Setting(body)
         .setName(this.t("settings.debug"))
         .setDesc(this.t("settings.debugDesc"))
         .addToggle((toggle) => toggle.setValue(draft.debugMode).onChange((value) => this.updateDraft({ debugMode: value })));
@@ -397,6 +413,7 @@ export class WispSettingTab extends PluginSettingTab {
 
   private async saveDraft(): Promise<void> {
     if (!this.draft || !this.dirty || !this.saveButton) return;
+    const previousMobileLayout = this.getSettings().mobileLayout;
     const apiKeyError = getApiKeyInputError(this.draft.apiKey);
     if (apiKeyError) {
       this.setStatus(apiKeyError, false);
@@ -404,14 +421,20 @@ export class WispSettingTab extends PluginSettingTab {
       return;
     }
     this.saveButton.disabled = true;
-    this.setStatus("Saving…", false);
+    this.setStatus(this.t("settings.saving"), false);
     try {
       await this.saveSettings(this.draft);
       this.dirty = false;
-      this.setStatus("Saved.", true);
+      const notice = previousMobileLayout === this.draft.mobileLayout
+        ? this.t("settings.savedNotice")
+        : this.t("settings.mobileLayoutSavedNotice");
+      this.setStatus(notice, true);
+      new Notice(notice);
     } catch (error) {
       this.saveButton.disabled = false;
-      this.setStatus(error instanceof Error ? `Save failed: ${error.message}` : "Save failed.", false);
+      const message = error instanceof Error ? `${this.t("settings.saveFailed")}: ${error.message}` : this.t("settings.saveFailed");
+      this.setStatus(message, false);
+      new Notice(message);
     }
   }
 
@@ -432,6 +455,10 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readLanguage(value: unknown, fallback: WispLanguage): WispLanguage {
   return value === "auto" || value === "en" || value === "zh-CN" ? value : fallback;
+}
+
+function readMobileLayout(value: unknown, fallback: WispMobileLayout): WispMobileLayout {
+  return value === "side" || value === "fullscreen" ? value : fallback;
 }
 
 function readInteger(value: unknown, fallback: number, minimum: number, maximum: number): number {

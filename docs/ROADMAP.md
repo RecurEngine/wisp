@@ -14,7 +14,8 @@ This roadmap follows the mobile-first constraint: every milestone must work in O
 - [x] Add Web Search settings with an independent secret and enable/disable control.
 - [x] Add English and Simplified Chinese UI translations with automatic device-language selection.
 - [x] Reorganize BYOK settings into Chat, Voice, Web Search, and Privacy & Diagnostics cards.
-- [x] Verify the current source with type checking, 35 automated tests, and a production build.
+- [x] Add a mobile layout setting for side-pane or fullscreen display, with side-pane-safe bottom spacing.
+- [x] Verify the current source with type checking, 38 automated tests, and a production build.
 
 ## Next milestone: verify the complete mobile loop
 
