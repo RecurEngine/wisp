@@ -49,9 +49,14 @@ export default class WispPlugin extends Plugin {
         this,
         () => this.wispSettings,
         async (settings) => {
-        this.wispSettings = settings;
+          this.wispSettings = settings;
           this.i18n.setLanguage(settings.language);
           await this.settingsStore.save(settings);
+        },
+        {
+          chat: (settings) => this.testChatConnection(settings),
+          voice: (settings) => this.testVoiceConnection(settings),
+          web: (settings) => this.testWebSearchConnection(settings)
         }
       )
     );
@@ -116,11 +121,34 @@ export default class WispPlugin extends Plugin {
     return new ToolApprovalModal(this.app, toolName, args, this.i18n).openAndWait();
   }
 
-  private createTranscriptionProvider(): TranscriptionProvider | null {
-    const { voiceApiKey, voiceBaseUrl, voiceModel } = this.wispSettings;
-    if (!this.wispSettings.voiceEnabled || !voiceApiKey.trim() || !voiceBaseUrl.trim() || !voiceModel.trim()) return null;
+  private async testChatConnection(settings: WispSettings): Promise<void> {
+    const provider = settings.provider === "claude"
+      ? new ClaudeProvider({ baseUrl: settings.baseUrl, apiKey: settings.apiKey, model: settings.model })
+      : new OpenAiCompatibleProvider({ baseUrl: settings.baseUrl, apiKey: settings.apiKey, model: settings.model });
+    await provider.testConnection();
+  }
+
+  private async testVoiceConnection(settings: WispSettings): Promise<void> {
+    const provider = this.createTranscriptionProvider(settings);
+    if (!provider) throw new Error("Voice provider configuration is incomplete.");
+    await provider.testConnection();
+  }
+
+  private async testWebSearchConnection(settings: WispSettings): Promise<void> {
+    const provider = createWebSearchProvider({
+      provider: settings.webSearchProvider,
+      baseUrl: settings.webSearchBaseUrl,
+      apiKey: settings.webSearchApiKey
+    });
+    if (!provider) throw new Error("Web search provider configuration is incomplete.");
+    await provider.search("Wisp connection test", { maxResults: 1 });
+  }
+
+  private createTranscriptionProvider(settings: WispSettings = this.wispSettings): TranscriptionProvider | null {
+    const { voiceApiKey, voiceBaseUrl, voiceModel } = settings;
+    if (!settings.voiceEnabled || !voiceApiKey.trim() || !voiceBaseUrl.trim() || !voiceModel.trim()) return null;
     return createTranscriptionProvider({
-      provider: this.wispSettings.voiceProvider,
+      provider: settings.voiceProvider,
       baseUrl: voiceBaseUrl,
       apiKey: voiceApiKey,
       model: voiceModel

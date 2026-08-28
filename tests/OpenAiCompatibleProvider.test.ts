@@ -1,3 +1,24 @@
+
+describe("OpenAiCompatibleProvider connection tests", () => {
+  it("tests OpenAI-compatible authentication with a minimal non-streaming request", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [] }), { status: 200 })));
+
+    await expect(new OpenAiCompatibleProvider({
+      baseUrl: "https://example.test/v1",
+      apiKey: "secret",
+      model: "test-model"
+    }).testConnection()).resolves.toBeUndefined();
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("https://example.test/v1/chat/completions");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      model: "test-model",
+      messages: [{ role: "user", content: "Reply with OK." }],
+      max_tokens: 1,
+      stream: false
+    });
+  });
+});
 import { describe, expect, it, vi } from "vitest";
 import { OpenAiCompatibleProvider } from "../src/providers/OpenAiCompatibleProvider";
 import type { LiteAgentProviderEvent, LiteAgentProviderRequest } from "../src/core/LiteAgentTypes";

@@ -117,3 +117,32 @@ describe("DashScopeTranscriptionProvider", () => {
     });
   });
 });
+
+describe("Voice provider connection tests", () => {
+  it("accepts a successful empty OpenAI-compatible transcript response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ text: "" }), { status: 200 })));
+    await expect(new OpenAiTranscriptionProvider({
+      baseUrl: "https://api.example.test/v1",
+      apiKey: "secret",
+      model: "test-transcribe"
+    }).testConnection()).resolves.toBeUndefined();
+  });
+
+  it("accepts a successful empty Deepgram transcript response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: { channels: [] } }), { status: 200 })));
+    await expect(new DeepgramTranscriptionProvider({
+      baseUrl: "https://api.deepgram.com",
+      apiKey: "secret",
+      model: "nova-3"
+    }).testConnection()).resolves.toBeUndefined();
+  });
+
+  it("accepts a successful empty DashScope transcript response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [] }), { status: 200 })));
+    await expect(new DashScopeTranscriptionProvider({
+      baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      apiKey: "secret",
+      model: "qwen3-asr-flash"
+    }).testConnection()).resolves.toBeUndefined();
+  });
+});

@@ -46,7 +46,7 @@ Wisp uses Obsidian APIs and browser APIs only in the production bundle. It does 
 Wisp is currently installed from source while the project is prepared for community-plugin distribution.
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/RecurEngine/wisp.git
 cd wisp
 npm install
 npm run build

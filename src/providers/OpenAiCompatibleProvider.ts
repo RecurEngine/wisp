@@ -23,6 +23,29 @@ type OpenAiFinishReason = "stop" | "tool_calls" | "length" | "unknown";
 export class OpenAiCompatibleProvider implements LiteAgentProvider {
   constructor(private readonly config: OpenAiCompatibleConfig) {}
 
+  async testConnection(): Promise<void> {
+    const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`;
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${this.config.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        messages: [{ role: "user", content: "Reply with OK." }],
+        max_tokens: 1,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Provider connection test failed (${response.status}): ${errorText.slice(0, 240)}`);
+    }
+  }
+
   async *stream(request: LiteAgentProviderRequest): AsyncIterable<LiteAgentProviderEvent> {
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`;
     const response = await fetch(endpoint, {

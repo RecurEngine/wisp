@@ -1,5 +1,6 @@
 export interface TranscriptionProvider {
   transcribe(audio: Blob, options?: TranscriptionOptions): Promise<string>;
+  testConnection(): Promise<void>;
 }
 
 export interface TranscriptionOptions {

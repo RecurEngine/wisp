@@ -48,7 +48,7 @@ Obsidian 是很多人沉淀和发展个人知识的地方，但用户会在手�
 当前项目仍处于通过源码安装和验证阶段，后续再准备 Obsidian 社区插件发布。
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/RecurEngine/wisp.git
 cd wisp
 npm install
 npm run build

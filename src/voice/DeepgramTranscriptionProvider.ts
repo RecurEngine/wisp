@@ -1,7 +1,17 @@
 import type { TranscriptionOptions, TranscriptionProvider, TranscriptionProviderConfig } from "./VoiceTypes";
+import { createSilentWav } from "./TestAudio";
 
 export class DeepgramTranscriptionProvider implements TranscriptionProvider {
   constructor(private readonly config: TranscriptionProviderConfig) {}
+
+  async testConnection(): Promise<void> {
+    try {
+      await this.transcribe(createSilentWav());
+    } catch (error) {
+      if (error instanceof Error && error.message === "Deepgram returned an empty transcript") return;
+      throw error;
+    }
+  }
 
   async transcribe(audio: Blob, options: TranscriptionOptions = {}): Promise<string> {
     const params = new URLSearchParams({ model: this.config.model, smart_format: "true" });

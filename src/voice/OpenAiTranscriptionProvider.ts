@@ -1,7 +1,17 @@
 import type { TranscriptionOptions, TranscriptionProvider, TranscriptionProviderConfig } from "./VoiceTypes";
+import { createSilentWav } from "./TestAudio";
 
 export class OpenAiTranscriptionProvider implements TranscriptionProvider {
   constructor(private readonly config: TranscriptionProviderConfig) {}
+
+  async testConnection(): Promise<void> {
+    try {
+      await this.transcribe(createSilentWav());
+    } catch (error) {
+      if (error instanceof Error && error.message === "Speech transcription returned an empty transcript") return;
+      throw error;
+    }
+  }
 
   async transcribe(audio: Blob, options: TranscriptionOptions = {}): Promise<string> {
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/audio/transcriptions`;

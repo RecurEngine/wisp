@@ -1,8 +1,9 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, setIcon } from "obsidian";
+import { App, ButtonComponent, Notice, Plugin, PluginSettingTab, Setting, setIcon } from "obsidian";
 import { getApiKeyInputError } from "../core/ApiKeyValidation";
+import { redactSecrets } from "../core/DebugInfo";
 import type { WispVoiceProvider } from "../voice/VoiceProviderRegistry";
 import type { WebSearchProviderId } from "../websearch/WebSearchTypes";
-import { I18n, type WispLanguage } from "../i18n/I18n";
+import { I18n, type TranslationKey, type WispLanguage } from "../i18n/I18n";
 
 const API_KEY_SECRET_ID = "wisp-api-key";
 const VOICE_API_KEY_SECRET_ID = "wisp-voice-api-key";
@@ -82,6 +83,12 @@ export const DEFAULT_WISP_SETTINGS: WispSettings = {
   voiceApiKey: ""
 };
 
+export interface WispSettingsTesters {
+  readonly chat: (settings: WispSettings) => Promise<void>;
+  readonly voice: (settings: WispSettings) => Promise<void>;
+  readonly web: (settings: WispSettings) => Promise<void>;
+}
+
 export class WispSettingsStore {
   constructor(private readonly plugin: Plugin) {}
 
@@ -147,7 +154,8 @@ export class WispSettingTab extends PluginSettingTab {
     app: App,
     plugin: Plugin,
     private readonly getSettings: () => WispSettings,
-    private readonly saveSettings: (settings: WispSettings) => Promise<void>
+    private readonly saveSettings: (settings: WispSettings) => Promise<void>,
+    private readonly testers: WispSettingsTesters
   ) {
     super(app, plugin);
     this.i18n = new I18n();
@@ -208,6 +216,7 @@ export class WispSettingTab extends PluginSettingTab {
           .setDesc(this.t("settings.systemPromptDesc"))
           .addTextArea((text) => text.setValue(draft.systemPrompt).onChange((value) => this.updateDraft({ systemPrompt: value })));
       });
+      this.addTestSetting(body, "settings.testConnection", "settings.testChatDesc", "chat", this.testers.chat);
     });
 
     this.renderOptionalCard(
@@ -244,6 +253,7 @@ export class WispSettingTab extends PluginSettingTab {
         this.addAdvanced(body, (advanced) => {
           this.addTextSetting(advanced, "settings.voiceBaseUrl", "settings.voiceBaseUrlDesc", draft.voiceBaseUrl, (value) => this.updateDraft({ voiceBaseUrl: value.trim() }));
         });
+        this.addTestSetting(body, "settings.testConnection", "settings.testVoiceDesc", "voice", this.testers.voice);
       }
     );
 
@@ -281,6 +291,7 @@ export class WispSettingTab extends PluginSettingTab {
         this.addAdvanced(body, (advanced) => {
           this.addTextSetting(advanced, "settings.webBaseUrl", "settings.webBaseUrlDesc", draft.webSearchBaseUrl, (value) => this.updateDraft({ webSearchBaseUrl: value.trim() }));
         });
+        this.addTestSetting(body, "settings.testConnection", "settings.testWebDesc", "web", this.testers.web);
       }
     );
 
@@ -375,6 +386,63 @@ export class WispSettingTab extends PluginSettingTab {
       text.inputEl.type = "password";
       text.inputEl.autocomplete = "off";
     });
+  }
+
+  private addTestSetting(
+    parent: HTMLElement,
+    nameKey: "settings.testConnection",
+    descriptionKey: "settings.testChatDesc" | "settings.testVoiceDesc" | "settings.testWebDesc",
+    kind: "chat" | "voice" | "web",
+    test: (settings: WispSettings) => Promise<void>
+  ): void {
+    new Setting(parent)
+      .setName(this.t(nameKey))
+      .setDesc(this.t(descriptionKey))
+      .addButton((button) => {
+        button.setButtonText(this.t("settings.test"));
+        button.onClick(() => void this.runTest(kind, button, test));
+      });
+  }
+
+  private async runTest(kind: "chat" | "voice" | "web", button: ButtonComponent, test: (settings: WispSettings) => Promise<void>): Promise<void> {
+    const settings = this.draft ?? this.getSettings();
+    const missingMessage = this.getMissingTestMessage(kind, settings);
+    if (missingMessage) {
+      new Notice(missingMessage);
+      return;
+    }
+
+    button.setDisabled(true);
+    button.setButtonText(this.t("settings.testing"));
+    try {
+      await test(settings);
+      new Notice(this.t("settings.testPassed"));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const safeDetail = redactSecrets(detail);
+      const message = /\b401\b|\b403\b|authentication/i.test(detail)
+        ? this.t("settings.testAuthFailed")
+        : this.t("settings.testFailed") + ": " + safeDetail;
+      new Notice(message, 8_000);
+    } finally {
+      button.setDisabled(false);
+      button.setButtonText(this.t("settings.test"));
+    }
+  }
+
+  private getMissingTestMessage(kind: "chat" | "voice" | "web", settings: WispSettings): string | undefined {
+    const missing = kind === "chat"
+      ? !settings.apiKey.trim() || !settings.baseUrl.trim() || !settings.model.trim()
+      : kind === "voice"
+        ? !settings.voiceApiKey.trim() || !settings.voiceBaseUrl.trim() || !settings.voiceModel.trim()
+        : !settings.webSearchApiKey.trim() || !settings.webSearchBaseUrl.trim();
+    if (!missing) return undefined;
+    const key: TranslationKey = kind === "chat"
+      ? "settings.testChatMissing"
+      : kind === "voice"
+        ? "settings.testVoiceMissing"
+        : "settings.testWebMissing";
+    return this.t(key);
   }
 
   private addAdvanced(parent: HTMLElement, render: (body: HTMLElement) => void): void {

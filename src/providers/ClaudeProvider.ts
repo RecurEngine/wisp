@@ -26,6 +26,32 @@ type ClaudeFinishReason = "stop" | "tool_calls" | "length" | "unknown";
 export class ClaudeProvider implements LiteAgentProvider {
   constructor(private readonly config: ClaudeProviderConfig) {}
 
+  async testConnection(): Promise<void> {
+    const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/v1/messages`;
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "anthropic-dangerous-direct-browser-access": "true",
+        "anthropic-version": this.config.apiVersion ?? "2023-06-01",
+        Authorization: `Bearer ${this.config.apiKey}`,
+        "x-api-key": this.config.apiKey
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "Reply with OK." }],
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Claude connection test failed (${response.status}): ${errorText.slice(0, 240)}`);
+    }
+  }
+
   async *stream(request: LiteAgentProviderRequest): AsyncIterable<LiteAgentProviderEvent> {
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/v1/messages`;
     const converted = toClaudeRequest(request.messages, request.tools);

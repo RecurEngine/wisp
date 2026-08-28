@@ -107,6 +107,27 @@ describe("ClaudeProvider", () => {
   });
 });
 
+describe("ClaudeProvider connection tests", () => {
+  it("tests Claude authentication with a minimal non-streaming request", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ content: [] }), { status: 200 })));
+
+    await expect(new ClaudeProvider({
+      baseUrl: "https://api.anthropic.com",
+      apiKey: "secret",
+      model: "claude-sonnet-4-20250514"
+    }).testConnection()).resolves.toBeUndefined();
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("https://api.anthropic.com/v1/messages");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1,
+      messages: [{ role: "user", content: "Reply with OK." }],
+      stream: false
+    });
+  });
+});
+
 function sse(event: string, data: Record<string, unknown>): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
