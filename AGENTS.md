@@ -1,8 +1,8 @@
-# Wisp Mobile Agent Instructions
+# Wisp Agent Instructions
 
 ## Scope
 
-Wisp Mobile is an independent, mobile-first Obsidian plugin. Its production bundle must run in both Obsidian Mobile and Obsidian Desktop.
+Wisp is an independent, mobile-first Obsidian plugin. Its production bundle must run in both Obsidian Mobile and Obsidian Desktop.
 
 ## Platform boundary
 

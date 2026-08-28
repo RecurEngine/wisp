@@ -1,10 +1,9 @@
 {
   "id": "wisp-mobile",
-  "name": "Wisp Mobile",
+  "name": "Wisp",
   "version": "0.1.0",
   "minAppVersion": "1.13.0",
-  "description": "A mobile-first AI agent for working with your Obsidian vault.",
+  "description": "A small intelligence that follows you everywhere, for managing your Obsidian vault.",
   "author": "RecurEngine",
   "isDesktopOnly": false
 }
-

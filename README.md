@@ -1,34 +1,148 @@
-# Wisp Mobile
+# Wisp
 
-Wisp Mobile is an independent, mobile-first Obsidian plugin for the Wisp agent experience.
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-The first milestone is intentionally small: load on Obsidian Mobile, open a workspace view, send a request to a Claude or OpenAI-compatible streaming endpoint, use vault tools, and keep the runtime boundary browser-safe. The same bundle is also intended to run on Obsidian Desktop.
+> A small intelligence that follows you everywhere.
 
-## Development
+Wisp is a cross-platform, mobile-first AI assistant for Obsidian. It brings provider-backed chat, vault actions, voice input, and optional web search into an Obsidian workspace view.
+
+The project is an early MVP. It is designed to run on Obsidian Mobile first and on Obsidian Desktop as a browser-safe compatibility target. Wisp does not provide model or search credits: you bring your own provider keys.
+
+## Why Wisp
+
+Obsidian is where many people collect and develop their knowledge, but the way they access it changes across phones, tablets, and computers. Wisp aims to provide one assistant experience that can work across the platforms where Obsidian runs, while treating the vault as the user's own data and keeping the runtime browser-safe.
+
+The current product direction is **free + BYOK (Bring Your Own Key)**. Users choose their own AI, speech, and search providers, and Wisp does not add hosted model credits or a required subscription. A future paid offering may be considered, but there is no paid plan or monetization requirement in the current scope.
+
+## Features
+
+- Claude Messages API and OpenAI-compatible streaming chat providers.
+- Obsidian vault tools for listing, reading, searching, opening, metadata, links, recent notes, and the active note.
+- Explicitly approved vault writes: create, append, update, and exact-match edit.
+- Multiple persistent chat sessions with browser-style tabs, drag reordering, rename, delete, and clear-history actions.
+- Markdown answers with links, code blocks, and Obsidian-rendered math support.
+- Manual voice messages through browser `MediaRecorder`, with transcript review before sending.
+- Real-time voice input MVP with voice-activity detection and automatic submit after a pause. It does not generate spoken assistant replies.
+- Speech-to-text providers: OpenAI-compatible endpoints, Deepgram, and Alibaba DashScope.
+- Optional read-only web search through Tavily or Brave Search.
+- Configurable mobile layout: side pane or fullscreen.
+- English and Simplified Chinese settings and chat UI.
+- Copyable debug diagnostics with API-key and bearer-token redaction.
+
+## Requirements
+
+- Obsidian 1.13.0 or newer.
+- A provider account and API key for chat.
+- Optional: a speech-to-text provider key for voice input.
+- Optional: a Tavily or Brave Search key for web search.
+- Node.js 18 or newer for development and building.
+
+Wisp uses Obsidian APIs and browser APIs only in the production bundle. It does not require Node.js, Electron, a local server, or a desktop CLI at runtime.
+
+## Installation
+
+Wisp is currently installed from source while the project is prepared for community-plugin distribution.
 
 ```bash
+git clone <repository-url>
+cd wisp-mobile
 npm install
-npm run typecheck
 npm run build
 ```
 
-Copy `main.js`, `manifest.json`, and `styles.css` into an Obsidian vault plugin directory for a manual smoke test.
+Copy the generated `main.js`, `manifest.json`, and `styles.css` into:
 
-The current tool loop includes mobile-safe Obsidian operations for listing, reading, searching, opening, inspecting metadata and links, reading the active note, and inspecting recent notes. It also includes `create_note`, `append_note`, `update_note`, and exact-match `edit_note`. Every write tool requires explicit approval in an Obsidian modal; delete and rename are intentionally not exposed yet.
+```text
+<your-vault>/.obsidian/plugins/wisp-mobile/
+```
 
-Settings use an explicit **Save changes** button. Enable **Debug mode** when diagnosing provider or tool failures; the chat shows a copyable diagnostic block with timestamps and stack details, while API keys and bearer tokens are redacted before copying.
+Then enable **Wisp** in **Settings → Community plugins**. The generated `main.js` and `styles.css` are intentionally ignored by Git; they are release artifacts produced by `npm run build`.
 
-Voice input records locally with the browser `MediaRecorder` API, then sends the completed clip directly to the selected speech-to-text provider. The transcript is placed in the composer for review before it is sent to the agent. The first supported providers are OpenAI-compatible transcription endpoints (including OpenAI and Groq), Deepgram, and Alibaba DashScope (`qwen3-asr-flash`). DashScope uses `https://dashscope.aliyuncs.com/compatible-mode/v1` by default.
+For development, run:
 
-Web search is available as an optional read-only `search_web` tool. The first adapters are Tavily and Brave Search, and requests use Obsidian's browser-safe `requestUrl` API. Search credentials are stored separately from chat and voice credentials; vault content is not added to search queries automatically. See [the roadmap](docs/ROADMAP.md) for current implementation status and next milestones.
+```bash
+npm run dev
+```
 
-Supported providers:
+This watches `src/main.ts` and creates a development bundle with an inline source map. Use a production build before installing the bundle on a device.
 
-- Claude Messages API: `https://api.anthropic.com`, for example `claude-sonnet-4-20250514`.
-- OpenAI-compatible API: `https://api.openai.com/v1` or another compatible endpoint.
+## Configuration
 
-## Compatibility rule
+Open **Settings → Wisp** and configure the chat provider first. Wisp supports:
 
-The plugin bundle must stay within Obsidian APIs and browser Web APIs. Do not add Node.js, Electron, or desktop-only provider SDK imports to `src/`.
+| Capability | Providers | Stored data |
+| --- | --- | --- |
+| Chat | Claude Messages API, OpenAI-compatible API | Key in Obsidian SecretStorage; endpoint, model, and prompt in plugin settings |
+| Speech-to-text | OpenAI-compatible, Deepgram, Alibaba DashScope | Key in Obsidian SecretStorage; endpoint and model in plugin settings |
+| Web search | Tavily, Brave Search | Key in Obsidian SecretStorage; endpoint and result limit in plugin settings |
 
-Desktop is a second target, not a separate runtime branch. Differences such as microphone permissions, viewport layout, and provider network policy should be handled behind capability-aware browser-safe adapters.
+Use the raw key value in the corresponding field and click **Save changes**. Do not paste shell syntax such as `ANTHROPIC_AUTH_TOKEN=...`, quotes, or an exported environment variable assignment.
+
+On Obsidian Mobile, **Mobile view layout** controls whether Wisp opens as a side pane or a fullscreen view. After changing it, save the settings, close Wisp, and open it again.
+
+## Vault safety
+
+Read-only vault tools can inspect notes, folders, metadata, links, the active note, and recent notes. Tools that change notes always request explicit approval. Delete and note rename are not exposed in this MVP.
+
+Wisp only sends vault content to the configured chat provider when the agent needs a vault tool result to answer the request. Vault content is not automatically sent to web search or speech-to-text providers. Search results are treated as untrusted reference data by the agent.
+
+## Privacy and security
+
+- API keys are stored with Obsidian `SecretStorage`, not in `data.json`.
+- Network requests are made only for an explicit chat, transcription, or enabled web-search operation.
+- There is no telemetry service or background sync in this project.
+- Debug output redacts common API-key, bearer-token, and `api_key` values, but always review a diagnostic block before sharing.
+- Provider terms, retention, and data-processing policies still apply to the services you configure.
+
+See [SECURITY.md](SECURITY.md) for reporting instructions and the full sensitive-data checklist.
+
+## Project structure
+
+```text
+src/
+├── main.ts                  # Plugin lifecycle and application composition
+├── core/                    # Provider-neutral runtime, tools, errors, and contracts
+├── providers/               # Claude and OpenAI-compatible chat adapters
+├── tools/                   # Obsidian vault operations and path safety
+├── sessions/                # Persisted conversation/session state
+├── settings/                # SecretStorage, settings persistence, and settings UI
+├── views/                   # Chat view, composer, session UI, and approval modals
+├── voice/                   # Recorder, VAD, and speech-to-text adapters
+├── websearch/               # Search adapters and the read-only search_web tool
+└── i18n/                    # English and Simplified Chinese translations
+
+tests/                       # Unit tests mirroring the runtime modules
+docs/                        # Roadmap and technical direction
+```
+
+The dependency direction is intentionally simple: `main.ts` composes services; views depend on provider-neutral runtime contracts; provider adapters own protocol details; vault tools own Obsidian file operations. Production code must remain free of Node.js, Electron, `process`, and `Buffer` dependencies.
+
+## Development checks
+
+Run the full local verification before opening a pull request:
+
+```bash
+npm run typecheck
+npm run test
+npm run build
+```
+
+Also manually test on Obsidian Mobile and Desktop when changing runtime behavior. At minimum, verify one chat request, one vault read, one approved write, one voice transcription, one web search, and one failure/recovery path.
+
+## Current limitations
+
+- Search source cards and explicit source actions are planned but not yet implemented.
+- Web page extraction, caching, retries, and additional regional search providers are not included.
+- Voice input depends on browser microphone permission and the selected provider's audio limits.
+- The real-time voice feature is input-only; there is no text-to-speech or full-duplex audio session.
+- Community-plugin publication metadata and release automation are not yet configured.
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/TECHNICAL_DIRECTION.md](docs/TECHNICAL_DIRECTION.md) for the active plan.
+
+## Contributing
+
+Issues and focused pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before making a change, especially the browser-safe runtime boundary and provider ownership rules.
+
+## License
+
+Wisp is released under the [MIT License](LICENSE).

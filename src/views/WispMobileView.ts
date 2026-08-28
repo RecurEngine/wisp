@@ -63,7 +63,7 @@ export class WispMobileView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Wisp Mobile";
+    return "Wisp";
   }
 
   getIcon(): string {

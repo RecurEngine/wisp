@@ -1,7 +1,7 @@
 export type WispLanguage = "auto" | "en" | "zh-CN";
 
 const english = {
-  "settings.title": "Wisp Mobile",
+  "settings.title": "Wisp",
   "settings.byokBadge": "Free · Bring Your Own Key",
   "settings.intro": "Wisp is free to use. Add your own provider keys to enable chat, voice input, or web search. Keys stay in Obsidian SecretStorage and are never written to data.json.",
   "settings.saved": "All changes are saved.",
@@ -114,7 +114,7 @@ const english = {
   "view.readCurrent": "Read the current note",
   "view.createBrief": "Create a project brief",
   "view.enterRequest": "Enter a request for Wisp first.",
-  "view.configureProvider": "Configure a provider, API key, model, and base URL in Wisp Mobile settings.",
+  "view.configureProvider": "Configure a provider, API key, model, and base URL in Wisp settings.",
   "view.running": "Running…",
   "view.completed": "Completed",
   "view.failed": "Failed: {error}",
@@ -122,12 +122,12 @@ const english = {
   "view.copyError": "Copy error",
   "view.errorCopied": "Error copied to clipboard.",
   "view.copyFailed": "Could not copy the error. Select the text manually.",
-  "view.configureVoice": "Configure a voice provider, model, base URL, and API key in Wisp Mobile settings.",
+  "view.configureVoice": "Configure a voice provider, model, base URL, and API key in Wisp settings.",
   "view.configureVoiceBeforeTranscribe": "Configure a voice provider before transcribing.",
   "view.noSpeech": "No speech was detected. Try recording again.",
   "view.transcribed": "Voice transcribed. Review it, then send.",
   "view.microphoneUnavailable": "Microphone unavailable: {error}",
-  "view.voiceAuthFailed": "Voice authentication failed. Check the voice provider, base URL, model, and API key in Wisp Mobile settings.",
+  "view.voiceAuthFailed": "Voice authentication failed. Check the voice provider, base URL, model, and API key in Wisp settings.",
   "view.transcriptionFailed": "Voice transcription failed: {error}",
   "view.recordingCancelled": "Recording cancelled.",
   "view.listeningTimer": "Listening · {time}",
@@ -138,11 +138,11 @@ const english = {
   "modal.modifyVault": "{tool} wants to modify your vault.",
   "modal.cancel": "Cancel",
   "modal.approve": "Approve",
-  "command.open": "Open Wisp Mobile"
+  "command.open": "Open Wisp"
 } as const;
 
 const chinese: Record<keyof typeof english, string> = {
-  "settings.title": "Wisp Mobile",
+  "settings.title": "Wisp",
   "settings.byokBadge": "免费使用 · 自带 Key",
   "settings.intro": "Wisp 完全免费。配置你自己的 Provider Key 即可启用对话、语音输入或联网搜索。Key 保存在 Obsidian SecretStorage 中，不会写入 data.json。",
   "settings.saved": "所有修改已保存。",
@@ -255,7 +255,7 @@ const chinese: Record<keyof typeof english, string> = {
   "view.readCurrent": "读取当前笔记",
   "view.createBrief": "创建项目简报",
   "view.enterRequest": "请先输入要交给 Wisp 的请求。",
-  "view.configureProvider": "请在 Wisp Mobile 设置中配置 Provider、API Key、模型和 Base URL。",
+  "view.configureProvider": "请在 Wisp 设置中配置 Provider、API Key、模型和 Base URL。",
   "view.running": "执行中…",
   "view.completed": "已完成",
   "view.failed": "失败：{error}",
@@ -263,7 +263,7 @@ const chinese: Record<keyof typeof english, string> = {
   "view.copyError": "复制错误",
   "view.errorCopied": "错误信息已复制。",
   "view.copyFailed": "无法复制错误信息，请手动选择文本。",
-  "view.configureVoice": "请在 Wisp Mobile 设置中配置语音 Provider、模型、Base URL 和 API Key。",
+  "view.configureVoice": "请在 Wisp 设置中配置语音 Provider、模型、Base URL 和 API Key。",
   "view.configureVoiceBeforeTranscribe": "请先配置语音 Provider，再进行转写。",
   "view.noSpeech": "没有检测到语音，请重新录制。",
   "view.transcribed": "语音已转写，请确认内容后发送。",
@@ -279,7 +279,7 @@ const chinese: Record<keyof typeof english, string> = {
   "modal.modifyVault": "{tool} 想要修改你的 Vault。",
   "modal.cancel": "取消",
   "modal.approve": "批准",
-  "command.open": "打开 Wisp Mobile"
+  "command.open": "打开 Wisp"
 };
 
 const translations: Record<Exclude<WispLanguage, "auto">, Record<keyof typeof english, string>> = {

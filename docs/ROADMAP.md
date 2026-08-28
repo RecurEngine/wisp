@@ -1,10 +1,10 @@
-# Wisp Mobile Roadmap
+# Wisp Roadmap
 
 This roadmap follows the mobile-first constraint: every milestone must work in Obsidian Mobile and remain compatible with Obsidian Desktop without adding Node.js or Electron runtime dependencies.
 
 ## Completed
 
-- [x] Create a standalone `wisp-mobile` Obsidian plugin.
+- [x] Create a standalone Wisp Obsidian plugin (technical id: `wisp-mobile`).
 - [x] Add Claude Messages API and OpenAI-compatible streaming providers.
 - [x] Add the LiteAgent tool loop, cancellation, write approval, and debug diagnostics.
 - [x] Add the core Obsidian vault operations for read, search, open, metadata, links, recent notes, create, append, update, and exact-match edit.

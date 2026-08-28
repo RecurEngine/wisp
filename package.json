@@ -1,8 +1,10 @@
 {
-  "name": "wisp-mobile",
+  "name": "wisp",
   "version": "0.1.0",
   "private": true,
-  "description": "A mobile-first AI agent plugin for Obsidian.",
+  "description": "A small intelligence that follows you everywhere, for managing your Obsidian vault.",
+  "author": "RecurEngine",
+  "license": "MIT",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

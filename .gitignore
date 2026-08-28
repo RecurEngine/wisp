@@ -4,6 +4,12 @@ styles.css
 data.json
 *.log
 .DS_Store
+.obsidian/
+.idea/
+.vscode/
+.eslintcache
+*.tsbuildinfo
+*.tgz
 .env
 .env.*
 !.env.example
