@@ -10,6 +10,22 @@ Wisp is a cross-platform, mobile-first AI assistant for Obsidian. It brings prov
 
 The project is an early MVP. It is designed to run on Obsidian Mobile first and on Obsidian Desktop as a browser-safe compatibility target. Wisp does not provide model or search credits: you bring your own provider keys.
 
+## Screenshots and demo
+
+Wisp is designed for a focused workspace experience on both desktop and mobile.
+
+### Desktop
+
+<img src="assets/wisp-screenshot.png" alt="Wisp running in Obsidian Desktop" width="100%">
+
+### Mobile
+
+<img src="assets/wisp-screenshot-mobile.jpg" alt="Wisp running in Obsidian Mobile" width="380">
+
+### Usage demo
+
+<img src="assets/wisp-demo.gif" alt="Wisp usage demo" width="100%">
+
 ## Why Wisp
 
 Obsidian is where many people collect and develop their knowledge, but the way they access it changes across phones, tablets, and computers. Wisp aims to provide one assistant experience that can work across the platforms where Obsidian runs, while treating the vault as the user's own data and keeping the runtime browser-safe.

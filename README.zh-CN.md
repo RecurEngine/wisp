@@ -12,6 +12,22 @@ Wisp 是一款跨平台、移动优先的 Obsidian AI 助手，将 Provider 对�
 
 当前项目处于早期 MVP 阶段，优先支持 Obsidian Mobile，同时保持在 Obsidian Desktop 上的兼容性。Wisp 不提供模型或搜索额度，用户需要使用自己的 Provider Key。
 
+## 截图与演示
+
+Wisp 旨在桌面端和移动端都提供专注、清晰的工作区体验。
+
+### 桌面端
+
+<img src="assets/wisp-screenshot.png" alt="Wisp 在 Obsidian Desktop 中运行" width="100%">
+
+### 移动端
+
+<img src="assets/wisp-screenshot-mobile.jpg" alt="Wisp 在 Obsidian Mobile 中运行" width="380">
+
+### 使用演示
+
+<img src="assets/wisp-demo.gif" alt="Wisp 使用演示" width="100%">
+
 ## 为什么做 Wisp
 
 Obsidian 是很多人沉淀和发展个人知识的地方，但用户会在手机、平板和电脑之间切换。Wisp 的初衷是做一款可以在 Obsidian 所支持的多端环境中使用的统一助手，让用户能够用自然语言管理自己的 Vault，同时保持浏览器安全的运行边界。

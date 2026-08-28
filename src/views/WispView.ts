@@ -789,13 +789,15 @@ export class WispView extends ItemView {
 
   private resizeInput(): void {
     if (!this.inputEl) return;
-    this.inputEl.setCssProps({ height: "auto" });
     const maxHeight = 140;
-    const height = Math.min(Math.max(this.inputEl.scrollHeight, 40), maxHeight);
-    this.inputEl.setCssProps({
-      height: `${height}px`,
-      "overflow-y": this.inputEl.scrollHeight > maxHeight ? "auto" : "hidden"
-    });
+    const lineHeight = 19;
+    const contentHeight = this.inputEl.scrollHeight;
+    const maxRows = Math.max(Math.floor(maxHeight / lineHeight), 1);
+    const rows = this.inputEl.value
+      ? Math.min(Math.max(Math.ceil(contentHeight / lineHeight), 1), maxRows)
+      : 1;
+    this.inputEl.setAttr("rows", String(rows));
+    this.inputEl.toggleClass("is-overflowing", contentHeight > maxHeight);
   }
 
   private startRecordingTimer(): void {
@@ -865,7 +867,6 @@ async function copyError(value: string, i18n: I18n): Promise<void> {
       const fallback = createEl("textarea", { cls: "wisp-clipboard-fallback" });
       fallback.value = value;
       fallback.setAttr("readonly", "true");
-      fallback.setCssProps({ position: "fixed", opacity: "0" });
       document.body.appendChild(fallback);
       let copied = false;
       try {
