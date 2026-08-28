@@ -2,6 +2,8 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
+<img src="assets/wisp-logo.png" alt="Wisp logo" width="180">
+
 > A small intelligence that follows you everywhere.
 
 Wisp is a cross-platform, mobile-first AI assistant for Obsidian. It brings provider-backed chat, vault actions, voice input, and optional web search into an Obsidian workspace view.

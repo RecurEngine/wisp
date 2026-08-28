@@ -2,6 +2,8 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
+<img src="assets/wisp-logo.png" alt="Wisp logo" width="180">
+
 > A small intelligence that follows you everywhere.
 >
 > 一个随时随地陪伴你的微小智能。
