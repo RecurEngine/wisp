@@ -503,6 +503,7 @@ export class WispView extends ItemView {
 
   private async submit(): Promise<void> {
     if (this.activeController || this.transcribing || this.voiceRecorder.isRecording) return;
+    this.resetVoiceControls();
     const typedInput = this.inputEl?.value.trim() ?? "";
     if (!typedInput && this.pendingImages.length === 0) {
       new Notice(this.t("view.enterRequest"));
@@ -717,11 +718,14 @@ export class WispView extends ItemView {
     } finally {
       this.transcribing = false;
       if (this.inputEl) this.inputEl.disabled = false;
+      this.finishingRecording = false;
+      this.recordingMode = undefined;
+      // Re-apply the idle state after transcription so stale stop/cancel
+      // controls cannot leak into the next send action.
+      this.setRecording(false);
       this.setStatus(this.t("view.ready"), false);
       this.updateMicState();
       this.updateInputState();
-      this.finishingRecording = false;
-      this.recordingMode = undefined;
       if (shouldSubmit) void this.submit();
     }
   }
@@ -818,6 +822,12 @@ export class WispView extends ItemView {
     this.updateMicState();
     this.updateInputState();
     if (this.statusEl) this.setStatus(recording ? this.t("view.listening") : this.t("view.ready"), recording);
+  }
+
+  private resetVoiceControls(): void {
+    this.voiceActivityDetector = undefined;
+    this.recordingMode = undefined;
+    this.setRecording(false);
   }
 
   private updateMicState(): void {
