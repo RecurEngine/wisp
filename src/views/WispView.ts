@@ -917,11 +917,11 @@ export class WispView extends ItemView {
   private resizeInput(): void {
     if (!this.inputEl) return;
     const maxHeight = 140;
-    this.inputEl.style.height = "auto";
+    this.inputEl.setCssProps({ height: "auto" });
     this.inputEl.setAttr("rows", "1");
     const contentHeight = this.inputEl.scrollHeight;
     const layout = calculateComposerLayout(this.inputEl.value, contentHeight, 40, maxHeight);
-    this.inputEl.style.height = `${layout.height}px`;
+    this.inputEl.setCssProps({ height: `${layout.height}px` });
     this.inputEl.toggleClass("is-overflowing", layout.overflowing);
   }
 

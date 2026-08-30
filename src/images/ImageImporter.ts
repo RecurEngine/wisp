@@ -39,7 +39,7 @@ export function pickImages(): Promise<ImageFile[]> {
     input.type = "file";
     input.accept = "image/*";
     input.multiple = true;
-    input.style.display = "none";
+    input.setCssProps({ display: "none" });
 
     const cleanup = (): void => {
       input.remove();
