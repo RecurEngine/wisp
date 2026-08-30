@@ -26,7 +26,8 @@ describe("VaultToolRegistry", () => {
       "create_note",
       "append_note",
       "update_note",
-      "edit_note"
+      "edit_note",
+      "insert_image_into_note"
     ]);
   });
 
@@ -124,5 +125,26 @@ describe("VaultToolRegistry", () => {
 
     expect(result).toEqual({ ok: true, value: { path: "Notes/idea.md", replaced: 1 } });
     expect(modify).toHaveBeenCalledWith(file, "updated\nafter");
+  });
+
+  it("inserts an image attachment into the active note", async () => {
+    const image = Object.assign(new TFile(), { path: "Attachments/photo.jpg" });
+    const note = Object.assign(new TFile(), { path: "Notes/idea.md" });
+    const modify = vi.fn().mockResolvedValue(undefined);
+    const app = {
+      vault: {
+        getAbstractFileByPath: vi.fn((path: string) => path === image.path ? image : note),
+        read: vi.fn().mockResolvedValue("Existing note"),
+        modify
+      },
+      workspace: { getActiveFile: vi.fn().mockReturnValue(note) },
+      fileManager: { generateMarkdownLink: vi.fn().mockReturnValue("[[photo.jpg]]") }
+    };
+
+    const tool = createVaultToolRegistry(app as never).get("insert_image_into_note");
+    const result = await tool?.execute({ imagePath: image.path });
+
+    expect(result).toEqual({ ok: true, value: { imagePath: image.path, notePath: note.path, inserted: true } });
+    expect(modify).toHaveBeenCalledWith(note, "Existing note\n![[photo.jpg]]");
   });
 });

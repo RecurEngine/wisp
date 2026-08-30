@@ -10,6 +10,17 @@ Wisp is a cross-platform, mobile-first AI assistant for Obsidian. It brings prov
 
 The project is an early MVP. It is designed to run on Obsidian Mobile first and on Obsidian Desktop as a browser-safe compatibility target. Wisp does not provide model or search credits: you bring your own provider keys.
 
+## Core features
+
+- Mobile-first AI chat inside Obsidian, with streaming Claude Messages API and OpenAI-compatible providers.
+- Vault-aware assistance for listing, reading, searching, opening, and understanding notes, folders, metadata, links, recent notes, and the active note.
+- Approved note editing: create, append, update, and exact-match edit operations always ask for confirmation before changing the vault.
+- Image attachments from the composer: choose up to three images from the device album, save them to the configured attachment folder, and let an agent insert them into a note. Vision-capable providers can inspect the images; text-only providers can still use their Vault paths.
+- Voice input through browser `MediaRecorder`, with transcript review, using OpenAI-compatible, Deepgram, or Alibaba DashScope speech-to-text providers; plus real-time voice input with voice-activity detection and pause-to-submit.
+- Persistent chat sessions with browser-style tabs, drag reordering, rename, delete, and clear-history actions.
+- Optional read-only web search through Tavily or Brave Search, Markdown answers with links, code blocks, and Obsidian-rendered math.
+- Mobile side-pane or fullscreen layouts, English and Simplified Chinese UI, and redacted copyable debug diagnostics.
+
 ## Screenshots and demo
 
 Wisp is designed for a focused workspace experience on both desktop and mobile.
@@ -31,21 +42,6 @@ Wisp is designed for a focused workspace experience on both desktop and mobile.
 Obsidian is where many people collect and develop their knowledge, but the way they access it changes across phones, tablets, and computers. Wisp aims to provide one assistant experience that can work across the platforms where Obsidian runs, while treating the vault as the user's own data and keeping the runtime browser-safe.
 
 The current product direction is **free + BYOK (Bring Your Own Key)**. Users choose their own AI, speech, and search providers, and Wisp does not add hosted model credits or a required subscription. A future paid offering may be considered, but there is no paid plan or monetization requirement in the current scope.
-
-## Features
-
-- Claude Messages API and OpenAI-compatible streaming chat providers.
-- Obsidian vault tools for listing, reading, searching, opening, metadata, links, recent notes, and the active note.
-- Explicitly approved vault writes: create, append, update, and exact-match edit.
-- Multiple persistent chat sessions with browser-style tabs, drag reordering, rename, delete, and clear-history actions.
-- Markdown answers with links, code blocks, and Obsidian-rendered math support.
-- Manual voice messages through browser `MediaRecorder`, with transcript review before sending.
-- Real-time voice input MVP with voice-activity detection and automatic submit after a pause. It does not generate spoken assistant replies.
-- Speech-to-text providers: OpenAI-compatible endpoints, Deepgram, and Alibaba DashScope.
-- Optional read-only web search through Tavily or Brave Search.
-- Configurable mobile layout: side pane or fullscreen.
-- English and Simplified Chinese settings and chat UI.
-- Copyable debug diagnostics with API-key and bearer-token redaction.
 
 ## Requirements
 

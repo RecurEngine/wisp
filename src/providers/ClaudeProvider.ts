@@ -5,6 +5,7 @@ import type {
   LiteAgentProviderRequest,
   LiteAgentToolDefinition
 } from "../core/LiteAgentTypes";
+import { formatImageAttachmentContext } from "../core/LiteAgentTypes";
 
 export interface ClaudeProviderConfig {
   readonly baseUrl: string;
@@ -54,8 +55,8 @@ export class ClaudeProvider implements LiteAgentProvider {
 
   async *stream(request: LiteAgentProviderRequest): AsyncIterable<LiteAgentProviderEvent> {
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/v1/messages`;
-    const converted = toClaudeRequest(request.messages, request.tools);
-    const response = await fetch(endpoint, {
+    let converted = await toClaudeRequest(request.messages, request.tools, request.loadImage, true);
+    let response = await fetch(endpoint, {
       method: "POST",
       headers: {
         Accept: "text/event-stream",
@@ -78,7 +79,35 @@ export class ClaudeProvider implements LiteAgentProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Claude request failed (${response.status}): ${errorText.slice(0, 240)}`);
+      if (converted.hasImageData && isUnsupportedImageError(errorText)) {
+        converted = await toClaudeRequest(request.messages, request.tools, request.loadImage, false);
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            Accept: "text/event-stream",
+            "Content-Type": "application/json",
+            "anthropic-dangerous-direct-browser-access": "true",
+            "anthropic-version": this.config.apiVersion ?? "2023-06-01",
+            Authorization: `Bearer ${this.config.apiKey}`,
+            "x-api-key": this.config.apiKey
+          },
+          body: JSON.stringify({
+            model: this.config.model,
+            max_tokens: this.config.maxTokens ?? 4096,
+            messages: converted.messages,
+            ...(converted.system ? { system: converted.system } : {}),
+            ...(converted.tools.length > 0 ? { tools: converted.tools } : {}),
+            stream: true
+          }),
+          signal: request.signal
+        });
+        if (!response.ok) {
+          const fallbackError = await response.text();
+          throw new Error(`Claude request failed (${response.status}): ${fallbackError.slice(0, 240)}`);
+        }
+      } else {
+        throw new Error(`Claude request failed (${response.status}): ${errorText.slice(0, 240)}`);
+      }
     }
     if (!response.body) throw new Error("Claude returned an empty stream");
 
@@ -140,19 +169,23 @@ export class ClaudeProvider implements LiteAgentProvider {
   }
 }
 
-function toClaudeRequest(
+async function toClaudeRequest(
   messages: readonly LiteAgentMessage[],
-  tools: readonly LiteAgentToolDefinition[]
-): {
+  tools: readonly LiteAgentToolDefinition[],
+  loadImage: LiteAgentProviderRequest["loadImage"],
+  includeImageData: boolean
+): Promise<{
   readonly system: string;
   readonly messages: Array<{ role: "user" | "assistant"; content: string | Array<Record<string, unknown>> }>;
   readonly tools: Array<Record<string, unknown>>;
-} {
+  readonly hasImageData: boolean;
+}> {
   const system = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
     .join("\n\n");
   const converted: ClaudeMessage[] = [];
+  let hasImageData = false;
   for (const message of messages) {
     if (message.role === "system") continue;
     if (message.role === "tool") {
@@ -182,7 +215,33 @@ function toClaudeRequest(
       converted.push({ role: "assistant", content });
       continue;
     }
-    converted.push({ role: message.role, content: message.content });
+    if (!message.attachments?.length) {
+      converted.push({ role: message.role, content: message.content });
+      continue;
+    }
+
+    const content: ClaudeContentBlock[] = [];
+    const attachmentContext = formatImageAttachmentContext(message.attachments);
+    const text = [message.content, attachmentContext].filter((value) => value.length > 0).join("\n\n");
+    if (text) content.push({ type: "text", text });
+    let messageHasImageData = false;
+    if (includeImageData && loadImage) {
+      for (const attachment of message.attachments) {
+        const data = await loadImage(attachment);
+        if (!data) continue;
+        content.push({
+          type: "image",
+          source: { type: "base64", media_type: attachment.mimeType, data }
+        });
+        messageHasImageData = true;
+        hasImageData = true;
+      }
+    }
+    if (!messageHasImageData) {
+      converted.push({ role: message.role, content: text });
+      continue;
+    }
+    converted.push({ role: message.role, content });
   }
 
   return {
@@ -192,8 +251,13 @@ function toClaudeRequest(
       name: tool.name,
       description: tool.description,
       input_schema: tool.parameters
-    }))
+    })),
+    hasImageData
   };
+}
+
+function isUnsupportedImageError(message: string): boolean {
+  return /image|vision|multimodal|content/i.test(message) && /unsupported|not support|invalid|only text|must be string|array/i.test(message);
 }
 
 function mergeToolResultMessages(messages: ClaudeMessage[]): ClaudeMessage[] {

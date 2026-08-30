@@ -13,6 +13,8 @@ import { SessionStore } from "./sessions/SessionStore";
 import { createWebSearchProvider } from "./websearch/WebSearchProviderRegistry";
 import { createWebSearchTool } from "./websearch/WebSearchTool";
 import { I18n } from "./i18n/I18n";
+import { arrayBufferToBase64 } from "./images/ImageImporter";
+import type { LiteAgentImageAttachment } from "./core/LiteAgentTypes";
 
 export default class WispPlugin extends Plugin {
   private settingsStore!: WispSettingsStore;
@@ -72,6 +74,7 @@ export default class WispPlugin extends Plugin {
         void this.activateView();
       }
     });
+
   }
 
   private createRuntime(): LiteAgentRuntime | null {
@@ -103,6 +106,7 @@ export default class WispPlugin extends Plugin {
       "You are Wisp, a concise assistant for an Obsidian vault.",
       "Use vault tools when the user asks about notes or recent activity.",
       "When the user asks to open or navigate to a note, identify its vault path and call open_note; do not only describe the note.",
+      "When an image attachment is present, use its exact Vault path from the attachment metadata. If the user asks to insert it into a note, call insert_image_into_note and wait for the tool result before claiming success. A model does not need image vision capability to insert the attachment.",
       "Do not claim to have changed a note unless a write tool reports success.",
       ...(webSearchProvider
         ? [
@@ -114,7 +118,15 @@ export default class WispPlugin extends Plugin {
     ]
       .filter((value) => value.trim().length > 0)
       .join("\n\n");
-    return new LiteAgentRuntime(provider, tools, systemPrompt);
+    return new LiteAgentRuntime(provider, tools, systemPrompt, {
+      loadImage: (attachment) => this.loadImageAttachment(attachment)
+    });
+  }
+
+  private async loadImageAttachment(attachment: LiteAgentImageAttachment): Promise<string | null> {
+    const file = this.app.vault.getFileByPath(attachment.path);
+    if (!file) return null;
+    return arrayBufferToBase64(await this.app.vault.readBinary(file));
   }
 
   private requestToolApproval(toolName: string, args: unknown): Promise<boolean> {

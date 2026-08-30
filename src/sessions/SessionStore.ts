@@ -1,5 +1,6 @@
 import type { Plugin } from "obsidian";
-import type { LiteAgentMessage } from "../core/LiteAgentTypes";
+import type { LiteAgentImageAttachment, LiteAgentMessage } from "../core/LiteAgentTypes";
+import { safeVaultPath } from "../tools/VaultPath";
 
 const DEFAULT_TITLE = "New chat";
 
@@ -159,7 +160,23 @@ function readSession(value: unknown): WispSession | null {
 function sanitizeHistory(history: readonly LiteAgentMessage[] | readonly unknown[]): LiteAgentMessage[] {
   return history.flatMap((value) => {
     if (!isRecord(value) || (value.role !== "user" && value.role !== "assistant") || typeof value.content !== "string") return [];
-    return [{ role: value.role, content: value.content }];
+    const attachments = sanitizeAttachments(value.attachments);
+    return [{
+      role: value.role,
+      content: value.content,
+      ...(attachments.length > 0 ? { attachments } : {})
+    }];
+  });
+}
+
+function sanitizeAttachments(value: unknown): LiteAgentImageAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((attachment) => {
+    if (!isRecord(attachment) || attachment.type !== "image") return [];
+    if (typeof attachment.path !== "string" || typeof attachment.name !== "string" || typeof attachment.mimeType !== "string") return [];
+    const path = safeVaultPath(attachment.path);
+    if (!path || !attachment.name.trim() || !attachment.mimeType.toLowerCase().startsWith("image/")) return [];
+    return [{ type: "image", path, name: attachment.name.trim(), mimeType: attachment.mimeType.toLowerCase() }];
   });
 }
 

@@ -19,7 +19,8 @@ export function createVaultToolRegistry(app: App): LiteAgentToolRegistry {
     createNoteTool(app),
     createAppendNoteTool(app),
     createUpdateNoteTool(app),
-    createEditNoteTool(app)
+    createEditNoteTool(app),
+    createInsertImageTool(app)
   ]);
   return registry;
 }
@@ -383,6 +384,45 @@ function createEditNoteTool(app: App): LiteAgentToolDefinition {
       if (count !== expected) return failure(`Edit is ambiguous: found ${count} occurrences, expected ${expected}`);
       await app.vault.modify(file, replaceAll(before, oldText, newText));
       return success({ path: safePath, replaced: count });
+    }
+  };
+}
+
+function createInsertImageTool(app: App): LiteAgentToolDefinition {
+  return {
+    name: "insert_image_into_note",
+    description: "Insert an existing image attachment into a markdown note. Use the exact Vault path from the attached image metadata. If notePath is omitted, use the currently active note.",
+    parameters: {
+      type: "object",
+      properties: {
+        imagePath: { type: "string", description: "Vault-relative path of the image attachment" },
+        notePath: { type: "string", description: "Optional Vault-relative path of the destination markdown note" }
+      },
+      required: ["imagePath"]
+    },
+    mutates: true,
+    async execute(args): Promise<LiteAgentToolResult> {
+      const imagePath = readStringArg(args, "imagePath");
+      if (!imagePath) return failure("imagePath must be a non-empty string");
+      const safeImagePath = safeVaultPath(imagePath);
+      if (!safeImagePath) return failure("imagePath must stay inside the vault");
+      const image = app.vault.getAbstractFileByPath(safeImagePath);
+      if (!(image instanceof TFile)) return failure(`Image not found: ${safeImagePath}`);
+
+      const requestedNotePath = readStringArg(args, "notePath");
+      const notePath = requestedNotePath ?? app.workspace.getActiveFile()?.path;
+      if (!notePath) return failure("No destination note was provided and no active markdown note exists");
+      const safeNotePath = safeVaultPath(notePath);
+      if (!safeNotePath) return failure("notePath must stay inside the vault");
+      const note = app.vault.getAbstractFileByPath(safeNotePath);
+      if (!(note instanceof TFile)) return failure(`Note not found: ${safeNotePath}`);
+
+      const markdownLink = app.fileManager.generateMarkdownLink(image, note.path);
+      const embed = markdownLink.startsWith("!") ? markdownLink : `!${markdownLink}`;
+      const before = await app.vault.read(note);
+      const separator = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
+      await app.vault.modify(note, `${before}${separator}${embed}`);
+      return success({ imagePath: image.path, notePath: note.path, inserted: true });
     }
   };
 }

@@ -10,9 +10,25 @@ export interface LiteAgentToolCall {
 export interface LiteAgentMessage {
   readonly role: LiteAgentRole;
   readonly content: string;
+  readonly attachments?: readonly LiteAgentImageAttachment[];
   readonly toolCalls?: readonly LiteAgentToolCall[];
   readonly toolCallId?: string;
   readonly name?: string;
+}
+
+export interface LiteAgentImageAttachment {
+  readonly type: "image";
+  readonly path: string;
+  readonly name: string;
+  readonly mimeType: string;
+}
+
+export function formatImageAttachmentContext(attachments: readonly LiteAgentImageAttachment[] | undefined): string {
+  if (!attachments || attachments.length === 0) return "";
+  const files = attachments
+    .map((attachment) => `- ${attachment.name} (${attachment.mimeType}) — Vault path: ${attachment.path}`)
+    .join("\n");
+  return `Attached image files. The Vault paths below are authoritative and can be passed to insert_image_into_note:\n${files}`;
 }
 
 export interface LiteAgentJsonSchema {
@@ -47,6 +63,7 @@ export type LiteAgentToolResult =
 export interface LiteAgentProviderRequest {
   readonly messages: readonly LiteAgentMessage[];
   readonly tools: readonly LiteAgentToolDefinition[];
+  readonly loadImage?: (attachment: LiteAgentImageAttachment) => Promise<string | null>;
   readonly signal?: AbortSignal;
 }
 
