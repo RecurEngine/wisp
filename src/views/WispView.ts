@@ -2,7 +2,7 @@ import { ItemView, MarkdownRenderer, Menu, Notice, Platform, setIcon, WorkspaceL
 import type { LiteAgentMessage } from "../core/LiteAgentTypes";
 import type { LiteAgentRuntime } from "../core/LiteAgentRuntime";
 import { formatDebugError, getUserFacingError } from "../core/DebugInfo";
-import { insertTranscript } from "./ComposerInput";
+import { calculateComposerLayout, insertTranscript } from "./ComposerInput";
 import { VoiceRecorder } from "../voice/VoiceRecorder";
 import { VoiceActivityDetector } from "../voice/VoiceActivityDetector";
 import type { TranscriptionProvider } from "../voice/VoiceTypes";
@@ -11,6 +11,8 @@ import { I18n, type TranslationKey } from "../i18n/I18n";
 import { SessionClearHistoryModal } from "./SessionClearHistoryModal";
 import { SessionDeleteModal } from "./SessionDeleteModal";
 import { SessionRenameModal } from "./SessionRenameModal";
+import { createImageAttachment, importImage, isImageFile, pickImages, releaseImagePreview, type ImageFile } from "../images/ImageImporter";
+import type { LiteAgentImageAttachment } from "../core/LiteAgentTypes";
 
 export const VIEW_TYPE_WISP = "wisp-view";
 
@@ -29,6 +31,7 @@ export class WispView extends ItemView {
   private transcriptEl?: HTMLElement;
   private statusEl?: HTMLElement;
   private sendButtonEl?: HTMLButtonElement;
+  private attachImageButtonEl?: HTMLButtonElement;
   private stopButtonEl?: HTMLButtonElement;
   private micButtonEl?: HTMLButtonElement;
   private realtimeMicButtonEl?: HTMLButtonElement;
@@ -49,6 +52,8 @@ export class WispView extends ItemView {
   private sessionTabsEl?: HTMLElement;
   private draggedTab?: HTMLElement;
   private draggedSessionId?: string;
+  private pendingImages: ImageFile[] = [];
+  private pendingImageEl?: HTMLElement;
   private dragPointerId?: number;
   private dragLongPressTimer?: number;
   private dragStartX = 0;
@@ -104,6 +109,9 @@ export class WispView extends ItemView {
     this.inputEl = inputEl;
     this.composerBoxEl = composerBox;
 
+    const pendingImage = composerBox.createDiv({ cls: "wisp-chat-pending-image" });
+    this.pendingImageEl = pendingImage;
+
     const voiceCapture = composerBox.createDiv({
       cls: "wisp-chat-voice-capture",
       attr: { "aria-live": "polite", "aria-label": this.t("view.listening") }
@@ -123,6 +131,11 @@ export class WispView extends ItemView {
     const toolbarMeta = toolbar.createDiv({ cls: "wisp-chat-toolbar-meta" });
     toolbarMeta.createEl("span", { cls: "wisp-chat-hint", text: this.t("view.shortcut") });
     const actions = toolbar.createDiv({ cls: "wisp-chat-actions" });
+    const attachImageButton = actions.createEl("button", {
+      cls: "wisp-chat-icon-button wisp-chat-attach-image",
+      attr: { type: "button", "aria-label": this.t("view.attachImage"), title: this.t("view.attachImage") }
+    });
+    setIcon(attachImageButton, "image");
     const micButton = actions.createEl("button", {
       cls: "wisp-chat-icon-button wisp-chat-mic",
       attr: { type: "button", "aria-label": this.t("view.record"), title: this.t("view.record") }
@@ -149,6 +162,7 @@ export class WispView extends ItemView {
     });
     setIcon(sendButton, "arrow-up");
     this.stopButtonEl = stopButton;
+    this.attachImageButtonEl = attachImageButton;
     this.micButtonEl = micButton;
     this.realtimeMicButtonEl = realtimeMicButton;
     this.cancelRecordingButtonEl = cancelRecordingButton;
@@ -157,6 +171,7 @@ export class WispView extends ItemView {
     cancelRecordingButton.disabled = true;
 
     this.registerDomEvent(sendButton, "click", () => void this.submit());
+    this.registerDomEvent(attachImageButton, "click", () => void this.selectImage());
     this.registerDomEvent(stopButton, "click", () => this.stop());
     this.registerDomEvent(micButton, "click", () => void this.toggleRecording());
     this.registerDomEvent(realtimeMicButton, "click", () => void this.toggleRealtimeRecording());
@@ -173,6 +188,7 @@ export class WispView extends ItemView {
     });
     this.resizeInput();
     this.updateInputState();
+    this.renderPendingImage();
   }
 
   async onClose(): Promise<void> {
@@ -182,6 +198,7 @@ export class WispView extends ItemView {
     this.transcriptEl = undefined;
     this.statusEl = undefined;
     this.sendButtonEl = undefined;
+    this.attachImageButtonEl = undefined;
     this.stopButtonEl = undefined;
     this.micButtonEl = undefined;
     this.realtimeMicButtonEl = undefined;
@@ -190,6 +207,9 @@ export class WispView extends ItemView {
     this.composerBoxEl = undefined;
     this.voiceCaptureEl = undefined;
     this.sessionTabsEl = undefined;
+    this.pendingImageEl = undefined;
+    this.releasePendingImagePreviews();
+    this.pendingImages = [];
     this.clearRecordingTimer();
     this.voiceRecorder.cancel();
   }
@@ -346,7 +366,7 @@ export class WispView extends ItemView {
       return;
     }
     for (const message of this.history) {
-      if (message.role === "user") this.appendMessage(message.role, message.content);
+      if (message.role === "user") this.appendMessage(message.role, message.content, message.attachments);
       if (message.role === "assistant") void this.renderAssistantMarkdown(this.appendMessage(message.role, message.content), message.content);
     }
     this.scrollToBottom();
@@ -483,8 +503,8 @@ export class WispView extends ItemView {
 
   private async submit(): Promise<void> {
     if (this.activeController || this.transcribing || this.voiceRecorder.isRecording) return;
-    const input = this.inputEl?.value.trim();
-    if (!input) {
+    const typedInput = this.inputEl?.value.trim() ?? "";
+    if (!typedInput && this.pendingImages.length === 0) {
       new Notice(this.t("view.enterRequest"));
       return;
     }
@@ -495,9 +515,28 @@ export class WispView extends ItemView {
       return;
     }
 
+    const input = typedInput || this.t("view.imageOnlyPrompt");
+    let attachments: LiteAgentImageAttachment[] = [];
+    if (this.pendingImages.length > 0) {
+      try {
+        const sourcePath = this.app.workspace.getActiveFile()?.path ?? "";
+        for (const image of this.pendingImages) {
+          const importedFile = await importImage(this.app, image, sourcePath);
+          attachments.push(createImageAttachment(image, importedFile));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "unknown error";
+        new Notice(this.t("view.imageImportFailed", { error: message }));
+        return;
+      }
+    }
+    this.releasePendingImagePreviews();
+    this.pendingImages = [];
+    this.renderPendingImage();
+
     const sessionId = this.deps.sessionStore.active().id;
     this.transcriptEl?.querySelector(".wisp-chat-welcome")?.remove();
-    this.appendMessage("user", input);
+    this.appendMessage("user", input, attachments);
     if (this.inputEl) {
       this.inputEl.value = "";
       this.resizeInput();
@@ -518,6 +557,7 @@ export class WispView extends ItemView {
     try {
       for await (const event of runtime.run(input, {
         history: this.history,
+        attachments,
         signal: controller.signal,
         approveTool: (toolName, args) => this.deps.requestToolApproval(toolName, args)
       })) {
@@ -545,7 +585,10 @@ export class WispView extends ItemView {
       }
       if (!controller.signal.aborted && !requestFailed) {
         await this.renderAssistantMarkdown(assistantBody, answer);
-        this.history.push({ role: "user", content: input }, { role: "assistant", content: answer });
+        this.history.push(
+          { role: "user", content: input, ...(attachments.length > 0 ? { attachments } : {}) },
+          { role: "assistant", content: answer }
+        );
         await this.deps.sessionStore.updateHistory(sessionId, this.history);
         this.refreshSessionSelector();
       }
@@ -637,6 +680,7 @@ export class WispView extends ItemView {
     this.setRecording(false);
     this.transcribing = true;
     this.updateMicState();
+    this.updateAttachmentState();
     this.setStatus(this.t("view.transcribing"), true);
     let shouldSubmit = false;
     try {
@@ -682,12 +726,16 @@ export class WispView extends ItemView {
     }
   }
 
-  private appendMessage(role: "user" | "assistant", text: string): HTMLElement {
+  private appendMessage(role: "user" | "assistant", text: string, attachments: readonly LiteAgentImageAttachment[] = []): HTMLElement {
     if (!this.transcriptEl) return createDiv();
     const message = this.transcriptEl.createDiv({ cls: `wisp-chat-message is-${role}` });
     const meta = message.createDiv({ cls: "wisp-chat-message-meta", text: role === "user" ? this.t("view.you") : this.t("view.wisp") });
     meta.setAttr("aria-hidden", "true");
-    return message.createDiv({ cls: "wisp-chat-message-body", text });
+    const body = message.createDiv({ cls: "wisp-chat-message-body", text });
+    for (const attachment of attachments) {
+      body.createDiv({ cls: "wisp-chat-attachment", text: `📎 ${attachment.name}` });
+    }
+    return body;
   }
 
   private appendLoadingIndicator(body: HTMLElement): HTMLElement {
@@ -738,6 +786,7 @@ export class WispView extends ItemView {
     this.stopButtonEl?.toggleClass("is-visible", busy);
     if (this.inputEl) this.inputEl.disabled = this.transcribing;
     this.updateMicState();
+    this.updateAttachmentState();
     if (this.statusEl) {
       this.setStatus(busy ? this.t("view.working") : this.transcribing ? this.t("view.transcribing") : this.voiceRecorder.isRecording ? this.t("view.listening") : this.t("view.ready"), busy || this.transcribing || this.voiceRecorder.isRecording);
     }
@@ -781,23 +830,89 @@ export class WispView extends ItemView {
     if (this.sendButtonEl) {
       this.sendButtonEl.disabled = Boolean(this.activeController) || this.transcribing || this.voiceRecorder.isRecording || !this.hasInput();
     }
+    this.updateAttachmentState();
   }
 
   private hasInput(): boolean {
-    return Boolean(this.inputEl?.value.trim());
+    return Boolean(this.inputEl?.value.trim() || this.pendingImages.length > 0);
+  }
+
+  private async selectImage(): Promise<void> {
+    if (this.activeController || this.transcribing || this.voiceRecorder.isRecording) return;
+    if (this.pendingImages.length >= 3) {
+      new Notice(this.t("view.imageLimit"));
+      return;
+    }
+    try {
+      const selected = await pickImages();
+      if (selected.length === 0) return;
+      const images = selected.filter((image) => isImageFile(image));
+      for (const image of selected) {
+        if (!isImageFile(image)) releaseImagePreview(image);
+      }
+      if (images.length === 0) {
+        new Notice(this.t("view.imageOnly"));
+        return;
+      }
+      const remaining = 3 - this.pendingImages.length;
+      if (images.length > remaining) new Notice(this.t("view.imageLimit"));
+      for (const image of images.slice(remaining)) releaseImagePreview(image);
+      this.pendingImages.push(...images.slice(0, remaining));
+      this.renderPendingImage();
+      this.updateInputState();
+      new Notice(this.t("view.imageAttached"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      new Notice(this.t("view.imageImportFailed", { error: message }));
+    }
+  }
+
+  private renderPendingImage(): void {
+    if (!this.pendingImageEl) return;
+    this.pendingImageEl.empty();
+    this.pendingImageEl.toggleClass("is-visible", this.pendingImages.length > 0);
+    for (const [index, image] of this.pendingImages.entries()) {
+      const item = this.pendingImageEl.createDiv({ cls: "wisp-chat-pending-image-item" });
+      if (image.previewUrl) {
+        item.createEl("img", {
+          cls: "wisp-chat-pending-image-thumb",
+          attr: { src: image.previewUrl, alt: image.name }
+        });
+      } else {
+        item.createSpan({ cls: "wisp-chat-pending-image-fallback", text: "📎" });
+      }
+      const removeButton = item.createEl("button", {
+        cls: "wisp-chat-attachment-remove",
+        text: "×",
+        attr: { type: "button", "aria-label": this.t("view.removeAttachment"), title: this.t("view.removeAttachment") }
+      });
+      this.registerDomEvent(removeButton, "click", () => {
+        const [removed] = this.pendingImages.splice(index, 1);
+        if (removed) releaseImagePreview(removed);
+        this.renderPendingImage();
+        this.updateInputState();
+      });
+    }
+  }
+
+  private releasePendingImagePreviews(): void {
+    for (const image of this.pendingImages) releaseImagePreview(image);
+  }
+
+  private updateAttachmentState(): void {
+    if (!this.attachImageButtonEl) return;
+    this.attachImageButtonEl.disabled = Boolean(this.activeController) || this.transcribing || this.voiceRecorder.isRecording;
   }
 
   private resizeInput(): void {
     if (!this.inputEl) return;
     const maxHeight = 140;
-    const lineHeight = 19;
+    this.inputEl.style.height = "auto";
+    this.inputEl.setAttr("rows", "1");
     const contentHeight = this.inputEl.scrollHeight;
-    const maxRows = Math.max(Math.floor(maxHeight / lineHeight), 1);
-    const rows = this.inputEl.value
-      ? Math.min(Math.max(Math.ceil(contentHeight / lineHeight), 1), maxRows)
-      : 1;
-    this.inputEl.setAttr("rows", String(rows));
-    this.inputEl.toggleClass("is-overflowing", contentHeight > maxHeight);
+    const layout = calculateComposerLayout(this.inputEl.value, contentHeight, 40, maxHeight);
+    this.inputEl.style.height = `${layout.height}px`;
+    this.inputEl.toggleClass("is-overflowing", layout.overflowing);
   }
 
   private startRecordingTimer(): void {

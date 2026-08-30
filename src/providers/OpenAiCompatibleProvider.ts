@@ -5,6 +5,7 @@ import type {
   LiteAgentProviderRequest,
   LiteAgentToolDefinition
 } from "../core/LiteAgentTypes";
+import { formatImageAttachmentContext } from "../core/LiteAgentTypes";
 
 export interface OpenAiCompatibleConfig {
   readonly baseUrl: string;
@@ -48,7 +49,8 @@ export class OpenAiCompatibleProvider implements LiteAgentProvider {
 
   async *stream(request: LiteAgentProviderRequest): AsyncIterable<LiteAgentProviderEvent> {
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`;
-    const response = await fetch(endpoint, {
+    let converted = await Promise.all(request.messages.map((message) => toOpenAiMessage(message, request.loadImage, true)));
+    let response = await fetch(endpoint, {
       method: "POST",
       headers: {
         Accept: "text/event-stream",
@@ -57,7 +59,7 @@ export class OpenAiCompatibleProvider implements LiteAgentProvider {
       },
       body: JSON.stringify({
         model: this.config.model,
-        messages: request.messages.map(toOpenAiMessage),
+        messages: converted.map((item) => item.message),
         tools: request.tools.length > 0 ? request.tools.map(toOpenAiTool) : undefined,
         tool_choice: request.tools.length > 0 ? "auto" : undefined,
         stream: true
@@ -67,7 +69,31 @@ export class OpenAiCompatibleProvider implements LiteAgentProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Provider request failed (${response.status}): ${errorText.slice(0, 240)}`);
+      if (converted.some((item) => item.hasImageData) && isUnsupportedImageError(errorText)) {
+        converted = await Promise.all(request.messages.map((message) => toOpenAiMessage(message, request.loadImage, false)));
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            Accept: "text/event-stream",
+            Authorization: `Bearer ${this.config.apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: this.config.model,
+            messages: converted.map((item) => item.message),
+            tools: request.tools.length > 0 ? request.tools.map(toOpenAiTool) : undefined,
+            tool_choice: request.tools.length > 0 ? "auto" : undefined,
+            stream: true
+          }),
+          signal: request.signal
+        });
+        if (!response.ok) {
+          const fallbackError = await response.text();
+          throw new Error(`Provider request failed (${response.status}): ${fallbackError.slice(0, 240)}`);
+        }
+      } else {
+        throw new Error(`Provider request failed (${response.status}): ${errorText.slice(0, 240)}`);
+      }
     }
     if (!response.body) throw new Error("Provider returned an empty stream");
 
@@ -127,9 +153,13 @@ export class OpenAiCompatibleProvider implements LiteAgentProvider {
   }
 }
 
-function toOpenAiMessage(message: LiteAgentMessage): Record<string, unknown> {
+async function toOpenAiMessage(
+  message: LiteAgentMessage,
+  loadImage: LiteAgentProviderRequest["loadImage"],
+  includeImageData: boolean
+): Promise<{ readonly message: Record<string, unknown>; readonly hasImageData: boolean }> {
   if (message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
-    return {
+    return { message: {
       role: "assistant",
       content: message.content,
       tool_calls: message.toolCalls.map((call) => ({
@@ -140,19 +170,39 @@ function toOpenAiMessage(message: LiteAgentMessage): Record<string, unknown> {
           arguments: call.rawArguments ?? JSON.stringify(call.arguments)
         }
       }))
-    };
+    }, hasImageData: false };
   }
 
   if (message.role === "tool") {
-    return {
+    return { message: {
       role: "tool",
       tool_call_id: message.toolCallId,
       name: message.name,
       content: message.content
-    };
+    }, hasImageData: false };
   }
 
-  return { role: message.role, content: message.content };
+  const attachmentContext = formatImageAttachmentContext(message.attachments);
+  if (!message.attachments?.length) return { message: { role: message.role, content: message.content }, hasImageData: false };
+
+  const content: Array<Record<string, unknown>> = [];
+  const text = [message.content, attachmentContext].filter((value) => value.length > 0).join("\n\n");
+  if (text) content.push({ type: "text", text });
+  let hasImageData = false;
+  if (includeImageData && loadImage) {
+    for (const attachment of message.attachments) {
+      const data = await loadImage(attachment);
+      if (!data) continue;
+      content.push({ type: "image_url", image_url: { url: `data:${attachment.mimeType};base64,${data}` } });
+      hasImageData = true;
+    }
+  }
+  if (!hasImageData) return { message: { role: message.role, content: text }, hasImageData: false };
+  return { message: { role: message.role, content }, hasImageData };
+}
+
+function isUnsupportedImageError(message: string): boolean {
+  return /image|vision|multimodal|content/i.test(message) && /unsupported|not support|invalid|only text|must be string|array/i.test(message);
 }
 
 function toOpenAiTool(tool: LiteAgentToolDefinition): Record<string, unknown> {

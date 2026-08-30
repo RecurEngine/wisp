@@ -59,6 +59,26 @@ describe("SessionStore", () => {
     expect(store.active().title).toBe("Summarize my product research");
   });
 
+  it("persists safe image attachment metadata without binary data", async () => {
+    const plugin = createPlugin();
+    const store = new SessionStore(plugin as never, () => 1000);
+    await store.load();
+
+    await store.updateHistory(store.active().id, [{
+      role: "user",
+      content: "Insert this image",
+      attachments: [{ type: "image", path: "Attachments/photo.jpg", name: "photo.jpg", mimeType: "image/jpeg" }]
+    }]);
+
+    const restored = new SessionStore(plugin as never, () => 2000);
+    await restored.load();
+    expect(restored.active().history[0]).toEqual({
+      role: "user",
+      content: "Insert this image",
+      attachments: [{ type: "image", path: "Attachments/photo.jpg", name: "photo.jpg", mimeType: "image/jpeg" }]
+    });
+  });
+
   it("keeps tab order stable, inserts new sessions after the active tab, and reorders them", async () => {
     const plugin = createPlugin();
     const store = new SessionStore(plugin as never, () => 1000);

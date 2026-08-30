@@ -1,5 +1,6 @@
 import type {
   LiteAgentMessage,
+  LiteAgentImageAttachment,
   LiteAgentProvider,
   LiteAgentRuntimeEvent,
   LiteAgentToolCall,
@@ -11,23 +12,30 @@ const DEFAULT_MAX_STEPS = 6;
 
 export interface LiteAgentRunOptions {
   readonly history?: readonly LiteAgentMessage[];
+  readonly attachments?: readonly LiteAgentImageAttachment[];
   readonly signal?: AbortSignal;
   readonly maxSteps?: number;
   readonly approveTool?: (toolName: string, args: unknown) => Promise<boolean>;
+}
+
+export interface LiteAgentRuntimeDeps {
+  readonly loadImage?: (attachment: LiteAgentImageAttachment) => Promise<string | null>;
 }
 
 export class LiteAgentRuntime {
   constructor(
     private readonly provider: LiteAgentProvider,
     private readonly tools: LiteAgentToolRegistry,
-    private readonly systemPrompt = "You are a helpful assistant with access to an Obsidian vault."
+    private readonly systemPrompt = "You are a helpful assistant with access to an Obsidian vault.",
+    private readonly deps: LiteAgentRuntimeDeps = {}
   ) {}
 
   async *run(input: string, options: LiteAgentRunOptions = {}): AsyncIterable<LiteAgentRuntimeEvent> {
     const messages: LiteAgentMessage[] = [];
     if (this.systemPrompt.trim()) messages.push({ role: "system", content: this.systemPrompt.trim() });
     messages.push(...(options.history ?? []));
-    messages.push({ role: "user", content: input });
+    const attachments = options.attachments ?? [];
+    messages.push({ role: "user", content: input, ...(attachments.length > 0 ? { attachments } : {}) });
 
     const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
     for (let step = 0; step < maxSteps; step += 1) {
@@ -40,6 +48,7 @@ export class LiteAgentRuntime {
         for await (const event of this.provider.stream({
           messages,
           tools: this.tools.list(),
+          ...(this.deps.loadImage ? { loadImage: this.deps.loadImage } : {}),
           signal: options.signal
         })) {
           if (options.signal?.aborted) return;
