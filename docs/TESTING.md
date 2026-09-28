@@ -1,6 +1,6 @@
 # Agent reliability tests
 
-From the 1.0.4 development baseline onward, changes to agent execution, recovery,
+From the 1.0.5 development baseline onward, changes to agent execution, recovery,
 permissions and vault writes should follow one behavioral test at a time:
 reproduce a failure, implement the smallest correction, then run related tests.
 Mock external boundaries (model responses, Obsidian storage/DOM), not the runtime
