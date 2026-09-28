@@ -145,13 +145,15 @@ npm run build
 
 修改运行时行为后，还需要在 Obsidian Mobile 和 Desktop 手动验证。至少测试一次对话、Vault 读取、批准写入、语音转写、联网搜索和失败恢复。
 
-发布版本时，先提交并推送代码，然后执行 `gh auth login` 登录 GitHub，再运行：
+发布版本时，执行 `gh auth login` 登录 GitHub，然后传入目标版本号：
 
 ```bash
-./scripts/release.sh
+./scripts/release.sh 1.0.7
 ```
 
-脚本会读取 `manifest.json` 中的版本号，执行检查和生产构建，创建并推送 annotated Git tag，然后将发布文件上传到 GitHub。
+脚本会同步 `manifest.json`、`package.json` 和 `package-lock.json`，安装锁定依赖，执行检查及生产构建，然后将**所有未忽略的改动**一起提交为 `chore: release 1.0.7`，原子推送当前分支和 annotated tag 到 origin，最后创建 GitHub Release 并上传文件。运行前请检查待提交的改动。
+
+检查失败时保留改动、不提交，修复后可用同一命令重试。已有标签、Release 或版本降级会被拒绝。如果在创建标签或推送后失败，需要先检查已完成的步骤再继续；脚本不会覆盖已发布版本。
 
 ## 当前限制
 

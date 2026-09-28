@@ -1,6 +1,6 @@
 {
   "name": "wisp",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "private": true,
   "description": "A small intelligence that follows you everywhere, for managing your Obsidian vault.",
   "author": "RecurEngine",
@@ -10,7 +10,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && node --test scripts/tests/*.checks.mjs",
     "lint": "npm run lint:ts && npm run lint:css",
     "lint:ts": "eslint src --max-warnings=0",
     "lint:css": "stylelint styles.css --max-warnings=0"

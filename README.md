@@ -143,13 +143,15 @@ npm run build
 
 Also manually test on Obsidian Mobile and Desktop when changing runtime behavior. At minimum, verify one chat request, one vault read, one approved write, one voice transcription, one web search, and one failure/recovery path.
 
-To publish a release, commit and push the changes first, authenticate GitHub CLI with `gh auth login`, then run:
+To publish a release, authenticate GitHub CLI with `gh auth login`, then pass the desired version:
 
 ```bash
-./scripts/release.sh
+./scripts/release.sh 1.0.7
 ```
 
-The script reads the version from `manifest.json`, runs validation and the production build, creates and pushes an annotated Git tag, and uploads the release assets to GitHub.
+The script updates `manifest.json`, `package.json` and `package-lock.json`, installs locked dependencies, runs validation and the production build, then commits **all non-ignored changes** as `chore: release 1.0.7`. It atomically pushes the current branch and annotated tag to origin, then uploads the release assets to GitHub. Review pending changes before running it.
+
+If validation fails, edits remain uncommitted; fix the failure and rerun the same command. Existing tags/releases and version downgrades are rejected. A failure after tagging or pushing requires inspecting the completed steps before retrying; the script does not overwrite published versions.
 
 ## Current limitations
 

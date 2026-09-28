@@ -23,6 +23,17 @@ npm run test -- tests/AgentRecovery.test.ts tests/WispView.test.ts
 npm run test -- tests/VaultToolRegistry.test.ts tests/ToolApprovalModal.test.ts
 ```
 
+## Dependency installation
+
+The project `.npmrc` uses the official npm registry. Generate lockfile changes
+against that registry; replacing mirror URLs alone does not verify that a package
+version or its tarball exists upstream. In particular, the old lockfile referenced
+`typed-array-byte-offset@1.0.6`, whose official tarball returned HTTP 404.
+
+The Check workflow runs a fresh-cache `npm ci --engine-strict` on Linux with
+Node 22 and 24 before lint, typecheck, tests and build. Keep this install check
+uncached so a local cached tarball cannot hide a broken lockfile.
+
 ## Coverage by behavior
 
 | Suite | Contract |
