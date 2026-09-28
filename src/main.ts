@@ -36,7 +36,7 @@ export default class WispPlugin extends Plugin {
       (leaf: WorkspaceLeaf) =>
         new WispView(leaf, {
           createRuntime: () => this.createRuntime(),
-          requestToolApproval: (toolName, args) => this.requestToolApproval(toolName, args),
+          requestToolApproval: (toolName, args, signal) => this.requestToolApproval(toolName, args, signal),
           getMaxSteps: () => this.wispSettings.maxSteps,
           isDebugMode: () => this.wispSettings.debugMode,
           mobileLayout: this.wispSettings.mobileLayout,
@@ -109,6 +109,7 @@ export default class WispPlugin extends Plugin {
       "When the user asks to open or navigate to a note, identify its vault path and call open_note; do not only describe the note.",
       "When an image attachment is present, use its exact Vault path from the attachment metadata. If the user asks to insert it into a note, call insert_image_into_note and wait for the tool result before claiming success. A model does not need image vision capability to insert the attachment.",
       "Do not claim to have changed a note unless a write tool reports success.",
+      "Before replacing a whole note with update_note, read it and pass its exact original content as expectedContent. On a write conflict, read again and reconsider the edit; never blindly overwrite it.",
       ...(webSearchProvider
         ? [
             "Use search_web for current or public-web information when it would improve the answer.",
@@ -130,8 +131,8 @@ export default class WispPlugin extends Plugin {
     return arrayBufferToBase64(await this.app.vault.readBinary(file));
   }
 
-  private requestToolApproval(toolName: string, args: unknown): Promise<boolean> {
-    return new ToolApprovalModal(this.app, toolName, args, this.i18n).openAndWait();
+  private requestToolApproval(toolName: string, args: unknown, signal?: AbortSignal): Promise<boolean> {
+    return new ToolApprovalModal(this.app, toolName, args, this.i18n).openAndWait(signal);
   }
 
   private async testChatConnection(settings: WispSettings): Promise<void> {

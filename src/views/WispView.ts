@@ -1,5 +1,6 @@
 import { ItemView, MarkdownRenderer, Menu, Notice, Platform, setIcon, WorkspaceLeaf } from "obsidian";
 import type { LiteAgentMessage } from "../core/LiteAgentTypes";
+import { hasUncertainWrites, type AgentRun } from "../core/AgentRun";
 import type { LiteAgentRuntime } from "../core/LiteAgentRuntime";
 import { formatDebugError, getUserFacingError } from "../core/DebugInfo";
 import { calculateComposerLayout, insertTranscript } from "./ComposerInput";
@@ -18,7 +19,7 @@ export const VIEW_TYPE_WISP = "wisp-view";
 
 export interface WispViewDeps {
   readonly createRuntime: () => LiteAgentRuntime | null;
-  readonly requestToolApproval: (toolName: string, args: unknown) => Promise<boolean>;
+  readonly requestToolApproval: (toolName: string, args: unknown, signal?: AbortSignal) => Promise<boolean>;
   readonly getMaxSteps: () => number;
   readonly isDebugMode: () => boolean;
   readonly mobileLayout: "side" | "fullscreen";
@@ -39,6 +40,7 @@ export class WispView extends ItemView {
   private cancelRecordingButtonEl?: HTMLButtonElement;
   private recordingStatusEl?: HTMLElement;
   private activeController?: AbortController;
+  private activeRunFinished?: Promise<void>;
   private recordingTimer?: number;
   private recordingTimeout?: number;
   private recordingStartedAt?: number;
@@ -194,6 +196,7 @@ export class WispView extends ItemView {
 
   async onClose(): Promise<void> {
     this.stop();
+    await this.activeRunFinished;
     this.clearDragState();
     this.inputEl = undefined;
     this.transcriptEl = undefined;
@@ -360,17 +363,49 @@ export class WispView extends ItemView {
 
   private renderActiveSession(): void {
     if (!this.transcriptEl) return;
-    this.history = [...this.deps.sessionStore.active().history];
+    this.history = this.deps.sessionStore.conversationHistory(this.deps.sessionStore.active().id);
     this.transcriptEl.empty();
     if (this.history.length === 0) {
       this.renderWelcome();
-      return;
     }
     for (const message of this.history) {
       if (message.role === "user") this.appendMessage(message.role, message.content, message.attachments);
-      if (message.role === "assistant") void this.renderAssistantMarkdown(this.appendMessage(message.role, message.content), message.content);
+      if (message.role === "assistant" && message.content) void this.renderAssistantMarkdown(this.appendMessage(message.role, message.content), message.content);
     }
+    this.renderRunRecords();
     this.scrollToBottom();
+  }
+
+  private renderRunRecords(): void {
+    if (!this.transcriptEl) return;
+    this.transcriptEl.querySelector(".wisp-run-records")?.remove();
+    const runs = this.deps.sessionStore.active().runs;
+    if (runs.length === 0) return;
+    const records = this.transcriptEl.createDiv({ cls: "wisp-run-records" });
+    records.setCssProps({ "min-width": "0", "margin-top": "12px" });
+    for (const run of runs) {
+      const details = records.createEl("details", { cls: "wisp-run-record" });
+      details.setCssProps({ "margin-block": "8px", padding: "10px", border: "1px solid var(--background-modifier-border)", "border-radius": "8px", "overflow-wrap": "anywhere" });
+      details.createEl("summary", { text: `${this.t("view.operationRecord")} · ${this.t(`view.runStatus.${run.status}`)} · ${run.input.slice(0, 80)}` });
+      for (const operation of run.operations) {
+        const row = details.createEl("details");
+        const status = operation.status === "running" ? "uncertain" : operation.status;
+        row.createEl("summary", { text: `${operation.call.name} · ${this.t(`view.operationStatus.${status}`)}` });
+        const content = row.createEl("pre", { text: JSON.stringify({ arguments: operation.call.arguments, result: operation.result }, null, 2) });
+        content.setCssProps({ "max-height": "240px", overflow: "auto", "white-space": "pre-wrap", "overflow-wrap": "anywhere" });
+      }
+      if (run.error) details.createEl("p", { text: run.error });
+      if (run.status !== "completed") {
+        details.open = true;
+        const uncertain = hasUncertainWrites(run);
+        details.createEl("p", { text: this.t(uncertain ? "view.uncertainWrite" : "view.interruptedRun") });
+        if (run === runs.at(-1) && !uncertain) {
+          const resumeButton = details.createEl("button", { text: this.t("view.resumeRun") });
+          resumeButton.disabled = Boolean(this.activeController);
+          this.registerDomEvent(resumeButton, "click", () => { void this.submit(run); });
+        }
+      }
+    }
   }
 
   private async createSession(): Promise<void> {
@@ -502,10 +537,10 @@ export class WispView extends ItemView {
     }
   }
 
-  private async submit(): Promise<void> {
+  private async submit(resume?: AgentRun): Promise<void> {
     if (this.activeController || this.transcribing || this.voiceRecorder.isRecording) return;
     this.resetVoiceControls();
-    const typedInput = this.inputEl?.value.trim() ?? "";
+    const typedInput = resume?.input ?? this.inputEl?.value.trim() ?? "";
     if (!typedInput && this.pendingImages.length === 0) {
       new Notice(this.t("view.enterRequest"));
       return;
@@ -519,7 +554,7 @@ export class WispView extends ItemView {
 
     const input = typedInput || this.t("view.imageOnlyPrompt");
     let attachments: LiteAgentImageAttachment[] = [];
-    if (this.pendingImages.length > 0) {
+    if (!resume && this.pendingImages.length > 0) {
       try {
         const sourcePath = this.app.workspace.getActiveFile()?.path ?? "";
         for (const image of this.pendingImages) {
@@ -532,14 +567,16 @@ export class WispView extends ItemView {
         return;
       }
     }
-    this.releasePendingImagePreviews();
-    this.pendingImages = [];
-    this.renderPendingImage();
+    if (!resume) {
+      this.releasePendingImagePreviews();
+      this.pendingImages = [];
+      this.renderPendingImage();
+    }
 
     const sessionId = this.deps.sessionStore.active().id;
     this.transcriptEl?.querySelector(".wisp-chat-welcome")?.remove();
-    this.appendMessage("user", input, attachments);
-    if (this.inputEl) {
+    this.appendMessage("user", resume ? this.t("view.resumeRun") : input, attachments);
+    if (!resume && this.inputEl) {
       this.inputEl.value = "";
       this.resizeInput();
       this.updateInputState();
@@ -552,17 +589,24 @@ export class WispView extends ItemView {
     let toolCallCount = 0;
     const controller = new AbortController();
     this.activeController = controller;
+    let finishRun!: () => void;
+    this.activeRunFinished = new Promise<void>((resolve) => { finishRun = resolve; });
     this.setBusy(true);
 
     let answer = "";
     let requestFailed = false;
     try {
       for await (const event of runtime.run(input, {
+        resume,
+        onCheckpoint: async (run) => {
+          await this.deps.sessionStore.saveRun(sessionId, run);
+          this.history = this.deps.sessionStore.conversationHistory(this.deps.sessionStore.active().id);
+        },
         maxSteps: this.deps.getMaxSteps(),
-        history: this.history,
+        history: this.deps.sessionStore.conversationHistory(sessionId),
         attachments,
         signal: controller.signal,
-        approveTool: (toolName, args) => this.deps.requestToolApproval(toolName, args)
+        approveTool: (toolName, args) => this.deps.requestToolApproval(toolName, args, controller.signal)
       })) {
         if (event.type === "text") {
           answer += event.text;
@@ -577,7 +621,7 @@ export class WispView extends ItemView {
           toolActivity.status.setText(this.t("view.running"));
           this.scrollToBottom();
         } else if (event.type === "tool_result") {
-          toolActivity?.status.setText(this.t("view.completed"));
+          toolActivity?.status.setText(event.result.ok ? this.t("view.completed") : this.t("view.operationStatus.failed"));
         } else if (event.type === "error") {
           requestFailed = true;
           assistantBody.removeClass("is-loading");
@@ -588,13 +632,8 @@ export class WispView extends ItemView {
       }
       if (!controller.signal.aborted && !requestFailed) {
         await this.renderAssistantMarkdown(assistantBody, answer);
-        this.history.push(
-          { role: "user", content: input, ...(attachments.length > 0 ? { attachments } : {}) },
-          { role: "assistant", content: answer }
-        );
-        await this.deps.sessionStore.updateHistory(sessionId, this.history);
-        this.refreshSessionSelector();
       }
+      this.refreshSessionSelector();
     } catch (error) {
       if (!controller.signal.aborted) {
         requestFailed = true;
@@ -602,15 +641,13 @@ export class WispView extends ItemView {
         this.appendError(message, error instanceof Error ? error.stack : String(error));
       }
     } finally {
-      if (requestFailed && this.inputEl?.value.trim() === "") {
-        this.inputEl.value = input;
-        this.resizeInput();
-        this.updateInputState();
-      }
       if (this.activeController === controller) this.activeController = undefined;
       assistantBody.removeClass("is-loading");
       loadingIndicator.remove();
       this.setBusy(false);
+      this.renderRunRecords();
+      finishRun();
+      this.activeRunFinished = undefined;
     }
   }
 
@@ -973,8 +1010,8 @@ export class WispView extends ItemView {
       return;
     }
     this.activeController?.abort();
-    this.activeController = undefined;
-    this.setBusy(false);
+    // Keep the view busy until the in-flight tool and its checkpoint have settled.
+    if (this.activeController) this.statusEl?.setText(this.t("view.stopping"));
   }
 
   private scrollToBottom(): void {

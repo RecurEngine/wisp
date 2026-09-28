@@ -20,3 +20,11 @@ npm run build
 ```
 
 The plugin should be manually smoke-tested on an Obsidian Mobile device and in Obsidian Desktop after each runtime integration milestone.
+
+## Agent reliability tests
+
+For changes to agent execution, recovery, approval, or vault writes, add a failing
+behavioral regression test before the fix and work in small red-green cycles.
+Exercise the real runtime/session store and mock only external boundaries.
+See [docs/TESTING.md](docs/TESTING.md) for the recovery contract, test suites,
+and required Android/Desktop smoke checks.

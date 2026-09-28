@@ -37,7 +37,8 @@ function createListNotesTool(app: App): LiteAgentToolDefinition {
       }
     },
     mutates: false,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const folderArg = readStringArg(args, "folder");
       const folder = folderArg === undefined ? undefined : safeVaultPath(folderArg);
       if (folderArg !== undefined && folder === null) return failure("folder must stay inside the vault");
@@ -66,7 +67,8 @@ function createReadNoteTool(app: App): LiteAgentToolDefinition {
       required: ["path"]
     },
     mutates: false,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const path = readStringArg(args, "path");
       if (!path) return failure("path must be a non-empty string");
       const safePath = safeVaultPath(path);
@@ -100,7 +102,8 @@ function createSearchVaultTool(app: App): LiteAgentToolDefinition {
       required: ["query"]
     },
     mutates: false,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const query = readStringArg(args, "query")?.trim();
       if (!query) return failure("query must be a non-empty string");
       const scope = readRecordArg(args, "scope");
@@ -141,6 +144,7 @@ function createSearchVaultTool(app: App): LiteAgentToolDefinition {
       });
 
       for (const file of files) {
+        signal?.throwIfAborted();
         if (matches.length >= limit || bytesScanned >= SEARCH_BYTE_BUDGET) break;
         const content = await app.vault.cachedRead(file);
         bytesScanned += content.length;
@@ -172,7 +176,8 @@ function createOpenNoteTool(app: App): LiteAgentToolDefinition {
       required: ["path"]
     },
     mutates: false,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const path = readStringArg(args, "path");
       if (!path) return failure("path must be a non-empty string");
       const safePath = safeVaultPath(path);
@@ -191,7 +196,8 @@ function createCurrentNoteTool(app: App): LiteAgentToolDefinition {
     description: "Read the note currently active in the Obsidian workspace, if any.",
     parameters: { type: "object", properties: {} },
     mutates: false,
-    async execute(): Promise<LiteAgentToolResult> {
+    async execute(_args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const file = app.workspace.getActiveFile();
       if (!(file instanceof TFile)) return failure("No active markdown note");
       return success({ path: file.path, content: await app.vault.cachedRead(file) });
@@ -208,7 +214,8 @@ function createRecentNotesTool(app: App): LiteAgentToolDefinition {
       properties: { limit: { type: "integer", description: "Maximum notes, from 1 to 20" } }
     },
     mutates: false,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const limit = clampInteger(readNumberArg(args, "limit") ?? 10, 1, 20);
       const notes = [...app.vault.getMarkdownFiles()]
         .sort((left, right) => right.stat.mtime - left.stat.mtime)
@@ -229,7 +236,8 @@ function createNoteMetadataTool(app: App): LiteAgentToolDefinition {
       required: ["path"]
     },
     mutates: false,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const file = getNoteFile(app, args);
       if ("error" in file) return failure(file.error);
       const cache = app.metadataCache.getFileCache(file.value);
@@ -255,7 +263,8 @@ function createNoteLinksTool(app: App): LiteAgentToolDefinition {
       required: ["path"]
     },
     mutates: false,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const file = getNoteFile(app, args);
       if ("error" in file) return failure(file.error);
       const path = file.value.path;
@@ -282,14 +291,16 @@ function createNoteTool(app: App): LiteAgentToolDefinition {
       required: ["path", "content"]
     },
     mutates: true,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const path = readStringArg(args, "path");
       const content = readStringArg(args, "content");
       if (path === undefined || content === undefined) return failure("path and content are required");
       const safePath = safeVaultPath(path);
       if (!safePath) return failure("path must stay inside the vault");
       if (app.vault.getAbstractFileByPath(safePath)) return failure(`Note already exists: ${safePath}`);
-      await ensureParentFolder(app, safePath);
+      await ensureParentFolder(app, safePath, signal);
+      signal?.throwIfAborted();
       await app.vault.create(safePath, content);
       return success({ path: safePath, created: true });
     }
@@ -309,7 +320,8 @@ function createAppendNoteTool(app: App): LiteAgentToolDefinition {
       required: ["path", "content"]
     },
     mutates: true,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const path = readStringArg(args, "path");
       const content = readStringArg(args, "content");
       if (path === undefined || content === undefined) return failure("path and content are required");
@@ -317,10 +329,14 @@ function createAppendNoteTool(app: App): LiteAgentToolDefinition {
       if (!safePath) return failure("path must stay inside the vault");
       const file = app.vault.getAbstractFileByPath(safePath);
       if (!(file instanceof TFile)) return failure(`Note not found: ${safePath}`);
-      const before = await app.vault.read(file);
-      const separator = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
-      await app.vault.modify(file, `${before}${separator}${content}`);
-      return success({ path: safePath, appendedCharacters: content.length + separator.length });
+      let appendedCharacters = 0;
+      await app.vault.process(file, (before) => {
+        signal?.throwIfAborted();
+        const separator = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
+        appendedCharacters = content.length + separator.length;
+        return `${before}${separator}${content}`;
+      });
+      return success({ path: safePath, appendedCharacters });
     }
   };
 }
@@ -328,17 +344,19 @@ function createAppendNoteTool(app: App): LiteAgentToolDefinition {
 function createUpdateNoteTool(app: App): LiteAgentToolDefinition {
   return {
     name: "update_note",
-    description: "Replace the full content of an existing vault note. This never creates a missing note.",
+    description: "Replace the full content of an existing vault note. Requires expectedContent from a fresh read; refuses concurrent changes. This never creates a missing note.",
     parameters: {
       type: "object",
       properties: {
         path: { type: "string", description: "Vault-relative path of an existing note" },
-        content: { type: "string", description: "The complete replacement markdown content" }
+        content: { type: "string", description: "The complete replacement markdown content" },
+        expectedContent: { type: "string", description: "Exact complete content returned by read_note before editing" }
       },
-      required: ["path", "content"]
+      required: ["path", "content", "expectedContent"]
     },
     mutates: true,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const path = readStringArg(args, "path");
       const content = readStringArg(args, "content");
       if (path === undefined || content === undefined) return failure("path and content are required");
@@ -346,7 +364,15 @@ function createUpdateNoteTool(app: App): LiteAgentToolDefinition {
       if (!safePath) return failure("path must stay inside the vault");
       const file = app.vault.getAbstractFileByPath(safePath);
       if (!(file instanceof TFile)) return failure(`Note not found: ${safePath}`);
-      await app.vault.modify(file, content);
+      const expectedContent = readStringArg(args, "expectedContent");
+      if (expectedContent === undefined) return failure("Read the note first and provide expectedContent");
+      let conflict = false;
+      await app.vault.process(file, (current) => {
+        signal?.throwIfAborted();
+        if (current !== expectedContent) { conflict = true; return current; }
+        return content;
+      });
+      if (conflict) return failure("Write conflict: the note changed. Read it again before editing.");
       return success({ path: safePath, updated: true });
     }
   };
@@ -367,7 +393,8 @@ function createEditNoteTool(app: App): LiteAgentToolDefinition {
       required: ["path", "oldText", "newText"]
     },
     mutates: true,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const path = readStringArg(args, "path");
       const oldText = readStringArg(args, "oldText");
       const newText = readStringArg(args, "newText");
@@ -377,12 +404,15 @@ function createEditNoteTool(app: App): LiteAgentToolDefinition {
       if (!safePath) return failure("path must stay inside the vault");
       const file = app.vault.getAbstractFileByPath(safePath);
       if (!(file instanceof TFile)) return failure(`Note not found: ${safePath}`);
-      const before = await app.vault.read(file);
       const expected = Math.max(1, Math.trunc(readNumberArg(args, "occurrences") ?? 1));
-      const count = countOccurrences(before, oldText);
-      if (count === 0) return failure("No matching text found");
+      let count = 0;
+      await app.vault.process(file, (before) => {
+        signal?.throwIfAborted();
+        count = countOccurrences(before, oldText);
+        return count === expected ? replaceAll(before, oldText, newText) : before;
+      });
+      if (count === 0) return failure("No matching text found; read the note again before editing");
       if (count !== expected) return failure(`Edit is ambiguous: found ${count} occurrences, expected ${expected}`);
-      await app.vault.modify(file, replaceAll(before, oldText, newText));
       return success({ path: safePath, replaced: count });
     }
   };
@@ -401,7 +431,8 @@ function createInsertImageTool(app: App): LiteAgentToolDefinition {
       required: ["imagePath"]
     },
     mutates: true,
-    async execute(args): Promise<LiteAgentToolResult> {
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
       const imagePath = readStringArg(args, "imagePath");
       if (!imagePath) return failure("imagePath must be a non-empty string");
       const safeImagePath = safeVaultPath(imagePath);
@@ -419,19 +450,22 @@ function createInsertImageTool(app: App): LiteAgentToolDefinition {
 
       const markdownLink = app.fileManager.generateMarkdownLink(image, note.path);
       const embed = markdownLink.startsWith("!") ? markdownLink : `!${markdownLink}`;
-      const before = await app.vault.read(note);
-      const separator = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
-      await app.vault.modify(note, `${before}${separator}${embed}`);
+      await app.vault.process(note, (before) => {
+        signal?.throwIfAborted();
+        const separator = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
+        return `${before}${separator}${embed}`;
+      });
       return success({ imagePath: image.path, notePath: note.path, inserted: true });
     }
   };
 }
 
-async function ensureParentFolder(app: App, path: string): Promise<void> {
+async function ensureParentFolder(app: App, path: string, signal?: AbortSignal): Promise<void> {
   const parts = path.split("/");
   parts.pop();
   let current = "";
   for (const part of parts) {
+    signal?.throwIfAborted();
     current = current ? `${current}/${part}` : part;
     if (!app.vault.getAbstractFileByPath(current)) await app.vault.createFolder(current);
   }

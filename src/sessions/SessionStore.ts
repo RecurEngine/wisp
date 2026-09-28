@@ -1,5 +1,7 @@
+import { closePendingCalls, type AgentRun } from "../core/AgentRun";
 import type { Plugin } from "obsidian";
 import type { LiteAgentImageAttachment, LiteAgentMessage } from "../core/LiteAgentTypes";
+import { patchPluginData } from "../storage/PluginData";
 import { safeVaultPath } from "../tools/VaultPath";
 
 const DEFAULT_TITLE = "New chat";
@@ -10,6 +12,7 @@ export interface WispSession {
   readonly createdAt: number;
   updatedAt: number;
   history: LiteAgentMessage[];
+  runs: AgentRun[];
 }
 
 interface PersistedSession {
@@ -18,6 +21,7 @@ interface PersistedSession {
   readonly createdAt?: unknown;
   readonly updatedAt?: unknown;
   readonly history?: unknown;
+  readonly runs?: unknown;
 }
 
 export class SessionStore {
@@ -103,10 +107,36 @@ export class SessionStore {
     await this.persist();
   }
 
+  conversationHistory(id: string): LiteAgentMessage[] {
+    const session = this.sessions.find((candidate) => candidate.id === id);
+    if (!session) return [];
+    const latest = session.runs.at(-1);
+    if (!latest) return structuredClone(session.history);
+    const snapshot = structuredClone(latest);
+    closePendingCalls(snapshot);
+    return sanitizeHistory(snapshot.messages);
+  }
+
+  async saveRun(id: string, run: AgentRun): Promise<void> {
+    const session = this.sessions.find((candidate) => candidate.id === id);
+    if (!session) throw new Error("Session no longer exists");
+    const previous = structuredClone(session);
+    const snapshot = structuredClone(run);
+    const index = session.runs.findIndex((candidate) => candidate.id === run.id);
+    if (index < 0) session.runs.push(snapshot);
+    else session.runs[index] = snapshot;
+    session.history = sanitizeHistory(run.messages);
+    session.updatedAt = this.now();
+    if (session.title === DEFAULT_TITLE) session.title = toTitle(run.input);
+    try { await this.persist(); }
+    catch (error) { Object.assign(session, previous); throw error; }
+  }
+
   async clearHistory(id: string): Promise<boolean> {
     const session = this.sessions.find((candidate) => candidate.id === id);
     if (!session) return false;
     session.history = [];
+    session.runs = [];
     session.updatedAt = this.now();
     await this.persist();
     return true;
@@ -127,15 +157,13 @@ export class SessionStore {
       title: DEFAULT_TITLE,
       createdAt: timestamp,
       updatedAt: timestamp,
+      runs: [],
       history: []
     };
   }
 
   private async persist(): Promise<void> {
-    const current = await this.plugin.loadData();
-    const base = isRecord(current) ? current : {};
-    await this.plugin.saveData({
-      ...base,
+    await patchPluginData(this.plugin, {
       sessions: this.sessions,
       activeSessionId: this.activeSessionId
     });
@@ -148,22 +176,35 @@ function readSession(value: unknown): WispSession | null {
   if (typeof persisted.id !== "string" || !persisted.id) return null;
   const createdAt = typeof persisted.createdAt === "number" ? persisted.createdAt : Date.now();
   const updatedAt = typeof persisted.updatedAt === "number" ? persisted.updatedAt : createdAt;
+  const runs = Array.isArray(persisted.runs) ? persisted.runs.filter(isAgentRun).map((value) => {
+    const run = structuredClone(value);
+    if (run.status === "running") run.status = "stopped";
+    closePendingCalls(run);
+    return run;
+  }) : [];
   return {
     id: persisted.id,
     title: typeof persisted.title === "string" && persisted.title.trim() ? persisted.title.trim() : DEFAULT_TITLE,
     createdAt,
     updatedAt,
-    history: Array.isArray(persisted.history) ? sanitizeHistory(persisted.history) : []
+    runs,
+    history: runs.length > 0 ? sanitizeHistory(runs[runs.length - 1].messages) : Array.isArray(persisted.history) ? sanitizeHistory(persisted.history) : []
   };
 }
 
 function sanitizeHistory(history: readonly LiteAgentMessage[] | readonly unknown[]): LiteAgentMessage[] {
-  return history.flatMap((value) => {
-    if (!isRecord(value) || (value.role !== "user" && value.role !== "assistant") || typeof value.content !== "string") return [];
+  return history.flatMap((value): LiteAgentMessage[] => {
+    if (!isRecord(value) || !["user", "assistant", "tool"].includes(String(value.role)) || typeof value.content !== "string") return [];
+    if (value.role === "tool") {
+      if (typeof value.toolCallId !== "string" || typeof value.name !== "string") return [];
+      return [{ role: "tool", content: value.content, toolCallId: value.toolCallId, name: value.name }];
+    }
+    const toolCalls = Array.isArray(value.toolCalls) ? value.toolCalls.filter((call) => isRecord(call) && typeof call.id === "string" && typeof call.name === "string") : [];
     const attachments = sanitizeAttachments(value.attachments);
     return [{
-      role: value.role,
+      role: value.role as "user" | "assistant",
       content: value.content,
+      ...(toolCalls.length > 0 ? { toolCalls } : {}),
       ...(attachments.length > 0 ? { attachments } : {})
     }];
   });
@@ -187,4 +228,14 @@ function toTitle(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAgentRun(value: unknown): value is AgentRun {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.input !== "string") return false;
+  if (!["running", "completed", "failed", "stopped"].includes(String(value.status))) return false;
+  if (!Array.isArray(value.messages) || !Array.isArray(value.operations)) return false;
+  return value.messages.every((message) => isRecord(message) && typeof message.content === "string" && ["user", "assistant", "tool"].includes(String(message.role)))
+    && value.operations.every((operation) => isRecord(operation) && isRecord(operation.call)
+      && typeof operation.call.id === "string" && typeof operation.call.name === "string"
+      && typeof operation.mutates === "boolean" && ["planned", "running", "succeeded", "failed", "denied", "skipped"].includes(String(operation.status)));
 }

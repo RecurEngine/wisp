@@ -12,6 +12,20 @@ async function collect(
 }
 
 describe("LiteAgentRuntime", () => {
+  it("does not write if stopped while approval is pending", async () => {
+    const controller = new AbortController();
+    let writes = 0;
+    const tools = new LiteAgentToolRegistry();
+    tools.register({ name: "write", description: "Write", parameters: { type: "object", properties: {} }, mutates: true,
+      execute: async () => { writes++; return { ok: true, value: "written" }; } });
+    const provider: LiteAgentProvider = { stream: () => collectAsync([{ type: "tool_call", id: "1", name: "write", arguments: {} }]) };
+    await collect(new LiteAgentRuntime(provider, tools).run("Write", {
+      signal: controller.signal,
+      approveTool: async () => { controller.abort(); return true; }
+    }));
+    expect(writes).toBe(0);
+  });
+
   it.each([undefined, 0])("runs beyond 100 rounds without a limit (%s)", async (maxSteps) => {
     let requests = 0;
     const tools = new LiteAgentToolRegistry();

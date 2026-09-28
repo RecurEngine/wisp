@@ -5,6 +5,7 @@ import type { WispVoiceProvider } from "../voice/VoiceProviderRegistry";
 import type { WebSearchProviderId } from "../websearch/WebSearchTypes";
 import { I18n, type TranslationKey, type WispLanguage } from "../i18n/I18n";
 
+import { patchPluginData } from "../storage/PluginData";
 import { DEFAULT_MAX_STEPS } from "../core/LiteAgentRuntime";
 
 const API_KEY_SECRET_ID = "wisp-api-key";
@@ -127,9 +128,7 @@ export class WispSettingsStore {
     this.plugin.app.secretStorage.setSecret(API_KEY_SECRET_ID, settings.apiKey);
     this.plugin.app.secretStorage.setSecret(VOICE_API_KEY_SECRET_ID, settings.voiceApiKey);
     this.plugin.app.secretStorage.setSecret(WEB_SEARCH_API_KEY_SECRET_ID, settings.webSearchApiKey);
-    const current = await this.plugin.loadData();
-    await this.plugin.saveData({
-      ...(isRecord(current) ? current : {}),
+    await patchPluginData(this.plugin, {
       provider: settings.provider,
       baseUrl: settings.baseUrl,
       model: settings.model,
@@ -580,8 +579,4 @@ function readWebSearchProvider(value: unknown, fallback: WebSearchProviderId): W
 
 function inferProviderFromBaseUrl(value: unknown): WispProvider {
   return typeof value === "string" && value.includes("anthropic.com") ? "claude" : "openai-compatible";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

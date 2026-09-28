@@ -3,6 +3,69 @@ import { TFile } from "obsidian";
 import { createVaultToolRegistry } from "../src/tools/VaultToolRegistry";
 
 describe("VaultToolRegistry", () => {
+  it.each([undefined, "original"])("requires a matching read before full replacement (%s)", async (expectedContent) => {
+    const file = Object.assign(new TFile(), { path: "note.md" });
+    let content = "original";
+    const app = { vault: {
+      getAbstractFileByPath: () => file,
+      process: async (_file: TFile, transform: (text: string) => string) => { content = transform(content); return content; }
+    } };
+    const result = await createVaultToolRegistry(app as never).get("update_note")!.execute({ path: file.path, content: "replacement", expectedContent });
+    expect(result.ok).toBe(expectedContent !== undefined);
+    expect(content).toBe(expectedContent === undefined ? "original" : "replacement");
+  });
+
+  it("does not commit an atomic edit after cancellation", async () => {
+    const file = Object.assign(new TFile(), { path: "note.md" });
+    const controller = new AbortController();
+    let content = "original";
+    const app = { vault: {
+      getAbstractFileByPath: () => file,
+      process: async (_file: TFile, transform: (text: string) => string) => {
+        controller.abort();
+        content = transform(content);
+        return content;
+      }
+    } };
+    await expect(createVaultToolRegistry(app as never).get("append_note")!.execute({ path: file.path, content: "new" }, controller.signal)).rejects.toThrow();
+    expect(content).toBe("original");
+  });
+
+  it.each(["append_note", "edit_note", "insert_image_into_note"])("%s preserves changes made before the atomic write", async (name) => {
+    const file = Object.assign(new TFile(), { path: "note.md" });
+    let content = "original\nuser addition";
+    const app = {
+      vault: {
+        getAbstractFileByPath: () => file,
+        read: async () => "original",
+        modify: async (_file: TFile, next: string) => { content = next; },
+        process: async (_file: TFile, transform: (text: string) => string) => { content = transform(content); return content; }
+      },
+      fileManager: { generateMarkdownLink: () => "[[image.png]]" }
+    };
+    const result = await createVaultToolRegistry(app as never).get(name)!.execute({
+      path: file.path, notePath: file.path, imagePath: "image.png", content: "agent addition", oldText: "original", newText: "updated"
+    });
+    expect(result.ok).toBe(true);
+    expect(content).toContain("user addition");
+    expect(content).toContain(name === "edit_note" ? "updated" : name === "append_note" ? "agent addition" : "![[image.png]]");
+  });
+
+  it("refuses a full replacement when the note changed since it was read", async () => {
+    const file = Object.assign(new TFile(), { path: "note.md" });
+    let content = "user changed this";
+    const app = { vault: {
+      getAbstractFileByPath: () => file,
+      modify: async (_file: TFile, next: string) => { content = next; },
+      process: async (_file: TFile, transform: (text: string) => string) => { content = transform(content); return content; }
+    } };
+    const result = await createVaultToolRegistry(app as never).get("update_note")!.execute({
+      path: file.path, content: "agent replacement", expectedContent: "original"
+    });
+    expect(result.ok).toBe(false);
+    expect(content).toBe("user changed this");
+  });
+
   const openLinkText = vi.fn();
   const openFile = vi.fn();
 
@@ -115,7 +178,7 @@ describe("VaultToolRegistry", () => {
     const app = {
       vault: {
         getAbstractFileByPath: vi.fn().mockReturnValue(file),
-        read: vi.fn().mockResolvedValue("before\nafter"),
+        process: async (_file: TFile, transform: (text: string) => string) => { await modify(_file, transform("before\nafter")); },
         modify
       }
     };
@@ -134,7 +197,7 @@ describe("VaultToolRegistry", () => {
     const app = {
       vault: {
         getAbstractFileByPath: vi.fn((path: string) => path === image.path ? image : note),
-        read: vi.fn().mockResolvedValue("Existing note"),
+        process: async (_file: TFile, transform: (text: string) => string) => { await modify(_file, transform("Existing note")); },
         modify
       },
       workspace: { getActiveFile: vi.fn().mockReturnValue(note) },

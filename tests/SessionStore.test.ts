@@ -138,7 +138,9 @@ describe("SessionStore", () => {
       { role: "assistant", content: "Here is the answer" }
     ]);
 
+    await store.saveRun(id, { id: "old-run", input: "Keep this tab", status: "completed", operations: [], messages: store.active().history });
     await expect(store.clearHistory(id)).resolves.toBe(true);
+    expect(store.active().runs).toEqual([]);
     expect(store.list()).toHaveLength(1);
     expect(store.active().id).toBe(id);
     expect(store.active().title).toBe("Product research");
@@ -149,5 +151,38 @@ describe("SessionStore", () => {
     expect(restored.active().id).toBe(id);
     expect(restored.active().title).toBe("Product research");
     expect(restored.active().history).toEqual([]);
+    expect(restored.active().runs).toEqual([]);
   });
+});
+
+it("keeps tool results and interrupted requests available after reopening a session", async () => {
+  const plugin = createPlugin();
+  const store = new SessionStore(plugin as never);
+  await store.load();
+  await store.saveRun(store.active().id, {
+    id: "run", input: "Append", status: "failed", operations: [], messages: [
+      { role: "user", content: "Append" },
+      { role: "assistant", content: "", toolCalls: [{ id: "call", name: "append_note", arguments: { path: "note.md" } }] },
+      { role: "tool", toolCallId: "call", name: "append_note", content: '{"ok":true}' }
+    ]
+  });
+  const restored = new SessionStore(plugin as never);
+  await restored.load();
+  expect(restored.active().history).toHaveLength(3);
+  expect(restored.active().history[1].toolCalls?.[0].name).toBe("append_note");
+  expect(restored.active().history[2].role).toBe("tool");
+});
+
+it("supplies complete tool-result pairs for a new request after interruption without changing the journal", async () => {
+  const store = new SessionStore(createPlugin() as never);
+  await store.load();
+  const call = { id: "pending", name: "append_note", arguments: { path: "note.md" } };
+  await store.saveRun(store.active().id, {
+    id: "run", input: "Append", status: "running",
+    messages: [{ role: "user", content: "Append" }, { role: "assistant", content: "", toolCalls: [call] }],
+    operations: [{ call, mutates: true, status: "running" }]
+  });
+  const history = store.conversationHistory(store.active().id);
+  expect(history.at(-1)).toMatchObject({ role: "tool", toolCallId: "pending", content: expect.stringContaining("unknown") });
+  expect(store.active().runs[0].operations[0].status).toBe("running");
 });

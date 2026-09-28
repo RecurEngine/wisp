@@ -3,15 +3,20 @@ import type { I18n } from "../i18n/I18n";
 
 export class ToolApprovalModal extends Modal {
   private settled = false;
+  private removeAbortListener?: () => void;
   private resolveApproval?: (approved: boolean) => void;
 
   constructor(app: App, private readonly toolName: string, private readonly args: unknown, private readonly i18n: I18n) {
     super(app);
   }
 
-  openAndWait(): Promise<boolean> {
+  openAndWait(signal?: AbortSignal): Promise<boolean> {
+    if (signal?.aborted) return Promise.resolve(false);
     return new Promise((resolve) => {
       this.resolveApproval = resolve;
+      const onAbort = () => this.finish(false);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      this.removeAbortListener = () => signal?.removeEventListener("abort", onAbort);
       this.open();
     });
   }
@@ -37,6 +42,7 @@ export class ToolApprovalModal extends Modal {
   private finish(approved: boolean): void {
     if (this.settled) return;
     this.settled = true;
+    this.removeAbortListener?.();
     this.resolveApproval?.(approved);
     this.resolveApproval = undefined;
     this.close();
