@@ -1,3 +1,4 @@
+import { requestHttp, streamHttp } from "../network/HttpClient";
 import type {
   LiteAgentMessage,
   LiteAgentProvider,
@@ -29,7 +30,7 @@ export class ClaudeProvider implements LiteAgentProvider {
 
   async testConnection(): Promise<void> {
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/v1/messages`;
-    const response = await fetch(endpoint, {
+    const response = await requestHttp(endpoint, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -56,7 +57,7 @@ export class ClaudeProvider implements LiteAgentProvider {
   async *stream(request: LiteAgentProviderRequest): AsyncIterable<LiteAgentProviderEvent> {
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/v1/messages`;
     let converted = await toClaudeRequest(request.messages, request.tools, request.loadImage, true);
-    let response = await fetch(endpoint, {
+    let response = await streamHttp(endpoint, {
       method: "POST",
       headers: {
         Accept: "text/event-stream",
@@ -81,7 +82,7 @@ export class ClaudeProvider implements LiteAgentProvider {
       const errorText = await response.text();
       if (converted.hasImageData && isUnsupportedImageError(errorText)) {
         converted = await toClaudeRequest(request.messages, request.tools, request.loadImage, false);
-        response = await fetch(endpoint, {
+        response = await streamHttp(endpoint, {
           method: "POST",
           headers: {
             Accept: "text/event-stream",

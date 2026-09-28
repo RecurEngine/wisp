@@ -1,3 +1,4 @@
+import { requestHttp } from "../network/HttpClient";
 import type { TranscriptionOptions, TranscriptionProvider, TranscriptionProviderConfig } from "./VoiceTypes";
 import { createSilentWav } from "./TestAudio";
 
@@ -19,7 +20,7 @@ export class OpenAiTranscriptionProvider implements TranscriptionProvider {
     form.append("file", audio, options.fileName ?? audioFileName(audio.type));
     form.append("model", this.config.model);
 
-    const response = await fetch(endpoint, {
+    const response = await requestHttp(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${this.config.apiKey}` },
       body: form,

@@ -1,3 +1,4 @@
+import { requestHttp } from "../network/HttpClient";
 import type { TranscriptionOptions, TranscriptionProvider, TranscriptionProviderConfig } from "./VoiceTypes";
 import { createSilentWav } from "./TestAudio";
 
@@ -16,7 +17,7 @@ export class DashScopeTranscriptionProvider implements TranscriptionProvider {
   async transcribe(audio: Blob, options: TranscriptionOptions = {}): Promise<string> {
     const audioData = await toDataUri(audio);
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`;
-    const response = await fetch(endpoint, {
+    const response = await requestHttp(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.config.apiKey}`,

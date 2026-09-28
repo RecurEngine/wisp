@@ -1,3 +1,4 @@
+import { requestUrl } from "obsidian";
 import { describe, expect, it, vi } from "vitest";
 import { ClaudeProvider } from "../src/providers/ClaudeProvider";
 import type { LiteAgentProviderEvent, LiteAgentProviderRequest } from "../src/core/LiteAgentTypes";
@@ -109,7 +110,7 @@ describe("ClaudeProvider", () => {
 
 describe("ClaudeProvider connection tests", () => {
   it("tests Claude authentication with a minimal non-streaming request", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ content: [] }), { status: 200 })));
+    vi.mocked(requestUrl).mockResolvedValue({ status: 200, headers: {}, text: JSON.stringify({ content: [] }) } as never);
 
     await expect(new ClaudeProvider({
       baseUrl: "https://api.anthropic.com",
@@ -117,7 +118,8 @@ describe("ClaudeProvider connection tests", () => {
       model: "claude-sonnet-4-20250514"
     }).testConnection()).resolves.toBeUndefined();
 
-    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    const init = vi.mocked(requestUrl).mock.calls[0][0] as import("obsidian").RequestUrlParam;
+    const url = init.url;
     expect(url).toBe("https://api.anthropic.com/v1/messages");
     expect(JSON.parse(String(init?.body))).toEqual({
       model: "claude-sonnet-4-20250514",

@@ -1,7 +1,8 @@
+import { requestUrl } from "obsidian";
 
 describe("OpenAiCompatibleProvider connection tests", () => {
   it("tests OpenAI-compatible authentication with a minimal non-streaming request", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [] }), { status: 200 })));
+    vi.mocked(requestUrl).mockResolvedValue({ status: 200, headers: {}, text: JSON.stringify({ choices: [] }) } as never);
 
     await expect(new OpenAiCompatibleProvider({
       baseUrl: "https://example.test/v1",
@@ -9,7 +10,8 @@ describe("OpenAiCompatibleProvider connection tests", () => {
       model: "test-model"
     }).testConnection()).resolves.toBeUndefined();
 
-    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    const init = vi.mocked(requestUrl).mock.calls[0][0] as import("obsidian").RequestUrlParam;
+    const url = init.url;
     expect(url).toBe("https://example.test/v1/chat/completions");
     expect(JSON.parse(String(init?.body))).toEqual({
       model: "test-model",

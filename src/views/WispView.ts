@@ -92,8 +92,8 @@ export class WispView extends ItemView {
     identity.createDiv({ cls: "wisp-chat-mark", text: "W" });
     const identityCopy = identity.createDiv({ cls: "wisp-chat-identity-copy" });
     identityCopy.createEl("h2", { text: "Wisp" });
-    identityCopy.createEl("span", { text: this.t("view.vaultAgent") });
-    this.statusEl = header.createEl("span", { cls: "wisp-chat-status", text: this.t("view.ready") });
+    identityCopy.createSpan({ text: this.t("view.vaultAgent") });
+    this.statusEl = header.createSpan({ cls: "wisp-chat-status", text: this.t("view.ready") });
 
     this.transcriptEl = shell.createDiv({ cls: "wisp-chat-transcript" });
     this.renderActiveSession();
@@ -132,7 +132,7 @@ export class WispView extends ItemView {
 
     const toolbar = composerBox.createDiv({ cls: "wisp-chat-toolbar" });
     const toolbarMeta = toolbar.createDiv({ cls: "wisp-chat-toolbar-meta" });
-    toolbarMeta.createEl("span", { cls: "wisp-chat-hint", text: this.t("view.shortcut") });
+    toolbarMeta.createSpan({ cls: "wisp-chat-hint", text: this.t("view.shortcut") });
     const actions = toolbar.createDiv({ cls: "wisp-chat-actions" });
     const attachImageButton = actions.createEl("button", {
       cls: "wisp-chat-icon-button wisp-chat-attach-image",
@@ -382,17 +382,14 @@ export class WispView extends ItemView {
     const runs = this.deps.sessionStore.active().runs;
     if (runs.length === 0) return;
     const records = this.transcriptEl.createDiv({ cls: "wisp-run-records" });
-    records.setCssProps({ "min-width": "0", "margin-top": "12px" });
     for (const run of runs) {
       const details = records.createEl("details", { cls: "wisp-run-record" });
-      details.setCssProps({ "margin-block": "8px", padding: "10px", border: "1px solid var(--background-modifier-border)", "border-radius": "8px", "overflow-wrap": "anywhere" });
       details.createEl("summary", { text: `${this.t("view.operationRecord")} · ${this.t(`view.runStatus.${run.status}`)} · ${run.input.slice(0, 80)}` });
       for (const operation of run.operations) {
         const row = details.createEl("details");
         const status = operation.status === "running" ? "uncertain" : operation.status;
         row.createEl("summary", { text: `${operation.call.name} · ${this.t(`view.operationStatus.${status}`)}` });
-        const content = row.createEl("pre", { text: JSON.stringify({ arguments: operation.call.arguments, result: operation.result }, null, 2) });
-        content.setCssProps({ "max-height": "240px", overflow: "auto", "white-space": "pre-wrap", "overflow-wrap": "anywhere" });
+        row.createEl("pre", { cls: "wisp-run-record-content", text: JSON.stringify({ arguments: operation.call.arguments, result: operation.result }, null, 2) });
       }
       if (run.error) details.createEl("p", { text: run.error });
       if (run.status !== "completed") {
@@ -956,10 +953,11 @@ export class WispView extends ItemView {
   private resizeInput(): void {
     if (!this.inputEl) return;
     const maxHeight = 140;
-    this.inputEl.setCssProps({ height: "auto" });
+    this.inputEl.addClass("is-measuring");
     this.inputEl.setAttr("rows", "1");
     const contentHeight = this.inputEl.scrollHeight;
     const layout = calculateComposerLayout(this.inputEl.value, contentHeight, 40, maxHeight);
+    this.inputEl.removeClass("is-measuring");
     this.inputEl.setCssProps({ height: `${layout.height}px` });
     this.inputEl.toggleClass("is-overflowing", layout.overflowing);
   }

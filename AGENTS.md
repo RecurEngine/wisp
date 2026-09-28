@@ -14,6 +14,7 @@ Wisp is an independent, mobile-first Obsidian plugin. Its production bundle must
 ## Commands
 
 ```bash
+npm run lint
 npm run typecheck
 npm run test
 npm run build

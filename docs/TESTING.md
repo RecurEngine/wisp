@@ -10,6 +10,7 @@ or session store under test.
 
 ```sh
 npm ci
+npm run lint
 npm run typecheck
 npm run test
 npm run build
@@ -73,3 +74,27 @@ Use a disposable vault on both Obsidian Desktop and Android:
 
 Automated tests cover the logic above. Actual Android lifecycle termination, sync
 providers, filesystem durability and visual layout still require these device checks.
+
+## Community review checks
+
+`npm run lint` runs the official Obsidian rules for static styles, DOM creation,
+and searchable settings definitions, plus the restriction on direct `fetch`.
+It covers these review categories, not every check performed by the remote scanner.
+Release preparation runs this command before the tests/build.
+
+Styles are tracked in `styles.css`, so a fresh checkout includes them for release.
+Dependencies resolve from the official npm registry. The TypeScript ESLint family
+used by the review plugin is pinned to a compatible version to support Node 22.12;
+verify dependency changes with `npm ci --engine-strict` as well as the normal checks.
+
+Ordinary HTTP, connection tests and audio uploads use Obsidian `requestUrl`.
+Chat SSE is the single documented `fetch` exception in `src/network/HttpClient.ts`:
+Obsidian 1.13's requestUrl response has no readable stream or AbortSignal API.
+Replacing it would buffer the entire reply and prevent transport cancellation.
+Native request cancellation stops waiting and discards late responses; it cannot
+cancel a request already sent by requestUrl. See the official API:
+https://docs.obsidian.md/Reference/TypeScript%20API/requestUrl
+
+The settings tab uses real declarative definitions, retaining explicit Save changes,
+SecretStorage for keys, provider-default switching and connection tests. Verify
+settings search, saving and secret masking in Obsidian 1.13 on Desktop and Android.

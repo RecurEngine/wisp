@@ -27,6 +27,9 @@ fi
 
 VERSION="$(node --input-type=module -e 'import fs from "node:fs"; const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8")); if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(manifest.version)) throw new Error("manifest version must use x.y.z"); process.stdout.write(manifest.version);')"
 
+echo "Running review lint checks..."
+npm run lint
+
 echo "Running typecheck..."
 npm run typecheck
 

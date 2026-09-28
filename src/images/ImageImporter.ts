@@ -35,11 +35,10 @@ export interface ImageImportApp {
 
 export function pickImages(): Promise<ImageFile[]> {
   return new Promise((resolve) => {
-    const input = document.createElement("input");
+    const input = createEl("input", { cls: "wisp-image-picker" });
     input.type = "file";
     input.accept = "image/*";
     input.multiple = true;
-    input.setCssProps({ display: "none" });
 
     const cleanup = (): void => {
       input.remove();

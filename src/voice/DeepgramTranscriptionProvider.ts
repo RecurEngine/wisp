@@ -1,3 +1,4 @@
+import { requestHttp } from "../network/HttpClient";
 import type { TranscriptionOptions, TranscriptionProvider, TranscriptionProviderConfig } from "./VoiceTypes";
 import { createSilentWav } from "./TestAudio";
 
@@ -16,7 +17,7 @@ export class DeepgramTranscriptionProvider implements TranscriptionProvider {
   async transcribe(audio: Blob, options: TranscriptionOptions = {}): Promise<string> {
     const params = new URLSearchParams({ model: this.config.model, smart_format: "true" });
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/v1/listen?${params.toString()}`;
-    const response = await fetch(endpoint, {
+    const response = await requestHttp(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Token ${this.config.apiKey}`,
