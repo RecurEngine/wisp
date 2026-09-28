@@ -1,5 +1,6 @@
+import { mockNativeHttp, nativeMock } from "./helpers/native-http";
 import { requestUrl } from "obsidian";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaudeProvider } from "../src/providers/ClaudeProvider";
 import type { LiteAgentProviderEvent, LiteAgentProviderRequest } from "../src/core/LiteAgentTypes";
 
@@ -28,8 +29,7 @@ describe("ClaudeProvider", () => {
       signal: undefined
     } satisfies LiteAgentProviderRequest;
 
-    vi.stubGlobal(
-      "fetch",
+    mockNativeHttp(
       vi.fn().mockResolvedValue(
         new Response(
           [
@@ -89,7 +89,7 @@ describe("ClaudeProvider", () => {
       { type: "done", finishReason: "tool_calls" }
     ]);
 
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = nativeMock;
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.anthropic.com/v1/messages");
     expect(new Headers(init?.headers).get("x-api-key")).toBe("secret");
@@ -133,3 +133,5 @@ describe("ClaudeProvider connection tests", () => {
 function sse(event: string, data: Record<string, unknown>): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
+
+beforeEach(() => { vi.mocked(requestUrl).mockReset(); });

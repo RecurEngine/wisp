@@ -31,7 +31,7 @@ export class SessionStore {
   constructor(private readonly plugin: Plugin, private readonly now: () => number = () => Date.now()) {}
 
   async load(): Promise<void> {
-    const data = await this.plugin.loadData();
+    const data: unknown = await this.plugin.loadData();
     const persisted = isRecord(data) ? data : {};
     const sessions = Array.isArray(persisted.sessions)
       ? persisted.sessions.map((value) => readSession(value)).filter((value): value is WispSession => value !== null)

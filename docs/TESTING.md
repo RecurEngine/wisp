@@ -78,7 +78,9 @@ providers, filesystem durability and visual layout still require these device ch
 ## Community review checks
 
 `npm run lint` runs the official Obsidian rules for static styles, DOM creation,
-and searchable settings definitions, plus the restriction on direct `fetch`.
+and searchable settings definitions, plus restrictions on direct `fetch`, deprecated clipboard calls, unsafe assignments,
+unnecessary assertions, floating promises and non-Error promise rejections.
+It also runs CSS checks for !important and browser compatibility.
 It covers these review categories, not every check performed by the remote scanner.
 Release preparation runs this command before the tests/build.
 
@@ -87,13 +89,11 @@ Dependencies resolve from the official npm registry. The TypeScript ESLint famil
 used by the review plugin is pinned to a compatible version to support Node 22.12;
 verify dependency changes with `npm ci --engine-strict` as well as the normal checks.
 
-Ordinary HTTP, connection tests and audio uploads use Obsidian `requestUrl`.
-Chat SSE is the single documented `fetch` exception in `src/network/HttpClient.ts`:
-Obsidian 1.13's requestUrl response has no readable stream or AbortSignal API.
-Replacing it would buffer the entire reply and prevent transport cancellation.
-Native request cancellation stops waiting and discards late responses; it cannot
-cancel a request already sent by requestUrl. See the official API:
-https://docs.obsidian.md/Reference/TypeScript%20API/requestUrl
+All provider HTTP, including chat SSE, uses Obsidian `requestUrl`; no rule disables
+or direct fetch calls are allowed in production sources. Chat SSE is parsed after
+the complete response arrives, so there is no real-time token display. Cancelling
+stops waiting and discards late responses without triggering further tool actions;
+requestUrl cannot cancel the already-sent transport request.
 
 The settings tab uses real declarative definitions, retaining explicit Save changes,
 SecretStorage for keys, provider-default switching and connection tests. Verify

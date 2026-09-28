@@ -308,7 +308,7 @@ export class WispView extends ItemView {
     this.registerDomEvent(tab, "pointercancel", (event) => {
       if (event.pointerId !== this.dragPointerId) return;
       this.cancelPendingTabDrag();
-      this.finishTabDrag();
+      void this.finishTabDrag();
     });
   }
 
@@ -953,11 +953,10 @@ export class WispView extends ItemView {
   private resizeInput(): void {
     if (!this.inputEl) return;
     const maxHeight = 140;
-    this.inputEl.addClass("is-measuring");
+    this.inputEl.style.removeProperty("height");
     this.inputEl.setAttr("rows", "1");
     const contentHeight = this.inputEl.scrollHeight;
     const layout = calculateComposerLayout(this.inputEl.value, contentHeight, 40, maxHeight);
-    this.inputEl.removeClass("is-measuring");
     this.inputEl.setCssProps({ height: `${layout.height}px` });
     this.inputEl.toggleClass("is-overflowing", layout.overflowing);
   }
@@ -1023,22 +1022,8 @@ export class WispView extends ItemView {
 
 async function copyError(value: string, i18n: I18n): Promise<void> {
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-    } else {
-      const fallback = createEl("textarea", { cls: "wisp-clipboard-fallback" });
-      fallback.value = value;
-      fallback.setAttr("readonly", "true");
-      document.body.appendChild(fallback);
-      let copied = false;
-      try {
-        fallback.select();
-        copied = document.execCommand("copy");
-      } finally {
-        fallback.remove();
-      }
-      if (!copied) throw new Error("Clipboard unavailable");
-    }
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+    await navigator.clipboard.writeText(value);
     new Notice(i18n.t("view.errorCopied"));
   } catch {
     new Notice(i18n.t("view.copyFailed"));

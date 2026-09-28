@@ -25,3 +25,12 @@ it("does not start a native request when already cancelled", async () => {
   await expect(requestHttp("https://example.test", { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
   expect(requestUrl).not.toHaveBeenCalled();
 });
+it("normalizes native non-Error rejections to Error objects", async () => {
+  vi.mocked(requestUrl).mockRejectedValue("Network unavailable");
+  await expect(requestHttp("https://example.test")).rejects.toBeInstanceOf(Error);
+});
+it("normalizes custom cancellation reasons to AbortError objects", async () => {
+  const controller = new AbortController();
+  controller.abort("user stopped");
+  await expect(requestHttp("https://example.test", { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError", message: "user stopped" });
+});

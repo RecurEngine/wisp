@@ -1,4 +1,4 @@
-import { requestHttp, streamHttp } from "../network/HttpClient";
+import { requestHttp } from "../network/HttpClient";
 import type {
   LiteAgentMessage,
   LiteAgentProvider,
@@ -57,7 +57,7 @@ export class ClaudeProvider implements LiteAgentProvider {
   async *stream(request: LiteAgentProviderRequest): AsyncIterable<LiteAgentProviderEvent> {
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/v1/messages`;
     let converted = await toClaudeRequest(request.messages, request.tools, request.loadImage, true);
-    let response = await streamHttp(endpoint, {
+    let response = await requestHttp(endpoint, {
       method: "POST",
       headers: {
         Accept: "text/event-stream",
@@ -82,7 +82,7 @@ export class ClaudeProvider implements LiteAgentProvider {
       const errorText = await response.text();
       if (converted.hasImageData && isUnsupportedImageError(errorText)) {
         converted = await toClaudeRequest(request.messages, request.tools, request.loadImage, false);
-        response = await streamHttp(endpoint, {
+        response = await requestHttp(endpoint, {
           method: "POST",
           headers: {
             Accept: "text/event-stream",
@@ -272,7 +272,7 @@ function mergeToolResultMessages(messages: ClaudeMessage[]): ClaudeMessage[] {
       Array.isArray(last.content) &&
       last.content.every((block) => block.type === "tool_result");
     if (canMerge) {
-      last.content.push(...message.content as ClaudeContentBlock[]);
+      last.content.push(...message.content);
     } else {
       merged.push(message);
     }

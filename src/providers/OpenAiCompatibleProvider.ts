@@ -1,4 +1,4 @@
-import { requestHttp, streamHttp } from "../network/HttpClient";
+import { requestHttp } from "../network/HttpClient";
 import type {
   LiteAgentMessage,
   LiteAgentProvider,
@@ -51,7 +51,7 @@ export class OpenAiCompatibleProvider implements LiteAgentProvider {
   async *stream(request: LiteAgentProviderRequest): AsyncIterable<LiteAgentProviderEvent> {
     const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`;
     let converted = await Promise.all(request.messages.map((message) => toOpenAiMessage(message, request.loadImage, true)));
-    let response = await streamHttp(endpoint, {
+    let response = await requestHttp(endpoint, {
       method: "POST",
       headers: {
         Accept: "text/event-stream",
@@ -72,7 +72,7 @@ export class OpenAiCompatibleProvider implements LiteAgentProvider {
       const errorText = await response.text();
       if (converted.some((item) => item.hasImageData) && isUnsupportedImageError(errorText)) {
         converted = await Promise.all(request.messages.map((message) => toOpenAiMessage(message, request.loadImage, false)));
-        response = await streamHttp(endpoint, {
+        response = await requestHttp(endpoint, {
           method: "POST",
           headers: {
             Accept: "text/event-stream",

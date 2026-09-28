@@ -40,9 +40,9 @@ export class DeepgramTranscriptionProvider implements TranscriptionProvider {
 
 function firstTranscript(value: unknown): string | undefined {
   if (!isRecord(value) || !isRecord(value.results) || !Array.isArray(value.results.channels)) return undefined;
-  const channel = value.results.channels[0];
+  const channel: unknown = value.results.channels[0];
   if (!isRecord(channel) || !Array.isArray(channel.alternatives)) return undefined;
-  const alternative = channel.alternatives[0];
+  const alternative: unknown = channel.alternatives[0];
   if (!isRecord(alternative) || typeof alternative.transcript !== "string") return undefined;
   const transcript = alternative.transcript.trim();
   return transcript.length > 0 ? transcript : undefined;

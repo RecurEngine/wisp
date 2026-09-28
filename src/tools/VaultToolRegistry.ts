@@ -138,7 +138,7 @@ function createSearchVaultTool(app: App): LiteAgentToolDefinition {
         const tag = scopeTag.startsWith("#") ? scopeTag : `#${scopeTag}`;
         const cache = app.metadataCache.getFileCache(file);
         const inlineTags = cache?.tags?.map((item) => item.tag) ?? [];
-        const frontmatterTags = cache?.frontmatter?.tags;
+        const frontmatterTags: unknown = cache?.frontmatter?.tags;
         const values = Array.isArray(frontmatterTags) ? frontmatterTags.map(String) : typeof frontmatterTags === "string" ? [frontmatterTags] : [];
         return inlineTags.includes(tag) || values.some((value) => (value.startsWith("#") ? value : `#${value}`) === tag);
       });

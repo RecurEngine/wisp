@@ -60,7 +60,7 @@ async function toDataUri(audio: Blob): Promise<string> {
 
 function firstTranscript(value: unknown): string | undefined {
   if (!isRecord(value) || !Array.isArray(value.choices)) return undefined;
-  const choice = value.choices[0];
+  const choice: unknown = value.choices[0];
   if (!isRecord(choice) || !isRecord(choice.message) || typeof choice.message.content !== "string") return undefined;
   const transcript = choice.message.content.trim();
   return transcript.length > 0 ? transcript : undefined;

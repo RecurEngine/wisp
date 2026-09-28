@@ -1,3 +1,4 @@
+import { mockNativeHttp, nativeMock } from "./helpers/native-http";
 import { requestUrl } from "obsidian";
 
 describe("OpenAiCompatibleProvider connection tests", () => {
@@ -21,7 +22,7 @@ describe("OpenAiCompatibleProvider connection tests", () => {
     });
   });
 });
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OpenAiCompatibleProvider } from "../src/providers/OpenAiCompatibleProvider";
 import type { LiteAgentProviderEvent, LiteAgentProviderRequest } from "../src/core/LiteAgentTypes";
 
@@ -38,8 +39,7 @@ describe("OpenAiCompatibleProvider", () => {
       tools: [],
       signal: undefined
     } satisfies LiteAgentProviderRequest;
-    vi.stubGlobal(
-      "fetch",
+    mockNativeHttp(
       vi.fn().mockResolvedValue(
         new Response(
           [
@@ -86,7 +86,7 @@ describe("OpenAiCompatibleProvider", () => {
       loadImage: async () => "AQI=",
       signal: undefined
     } satisfies LiteAgentProviderRequest;
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("data: [DONE]\n\n")));
+    mockNativeHttp(vi.fn().mockResolvedValue(new Response("data: [DONE]\n\n")));
 
     await collect(new OpenAiCompatibleProvider({
       baseUrl: "https://example.test/v1",
@@ -94,7 +94,7 @@ describe("OpenAiCompatibleProvider", () => {
       model: "vision-model"
     }).stream(request));
 
-    const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)) as {
+    const body = JSON.parse(String(nativeMock.mock.calls[0][1]?.body)) as {
       messages: Array<{ content: Array<Record<string, unknown>> }>;
     };
     expect(body.messages[0].content).toEqual([
@@ -117,7 +117,7 @@ describe("OpenAiCompatibleProvider", () => {
       loadImage: async () => "AQI=",
       signal: undefined
     } satisfies LiteAgentProviderRequest;
-    vi.stubGlobal("fetch", vi.fn()
+    mockNativeHttp(vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "model does not support image input" } }), { status: 400 }))
       .mockResolvedValueOnce(new Response("data: [DONE]\n\n")));
 
@@ -127,10 +127,12 @@ describe("OpenAiCompatibleProvider", () => {
       model: "text-model"
     }).stream(request));
 
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
-    const fallbackBody = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body)) as {
+    expect(nativeMock).toHaveBeenCalledTimes(2);
+    const fallbackBody = JSON.parse(String(nativeMock.mock.calls[1][1]?.body)) as {
       messages: Array<{ content: unknown }>;
     };
     expect(fallbackBody.messages[0].content).toEqual(expect.stringContaining("Vault path: Attachments/photo.jpg"));
   });
 });
+
+beforeEach(() => { vi.mocked(requestUrl).mockReset(); });
