@@ -12,6 +12,89 @@ async function collect(
 }
 
 describe("LiteAgentRuntime", () => {
+  it.each([undefined, 0])("runs beyond 100 rounds without a limit (%s)", async (maxSteps) => {
+    let requests = 0;
+    const tools = new LiteAgentToolRegistry();
+    tools.register({
+      name: "read", description: "Read a file", parameters: { type: "object", properties: {} },
+      mutates: false, execute: async () => ({ ok: true, value: "content" })
+    });
+    const provider: LiteAgentProvider = {
+      stream: () => {
+        requests += 1;
+        return collectAsync(requests <= 105
+          ? [{ type: "tool_call", id: String(requests), name: "read", arguments: {} }]
+          : [{ type: "text", text: "Finished." }]);
+      }
+    };
+    const events = await collect(new LiteAgentRuntime(provider, tools).run("Read files", { maxSteps }));
+    expect(requests).toBe(106);
+    expect(events.some((event) => event.type === "error")).toBe(false);
+    expect(events.slice(-2)).toEqual([{ type: "text", text: "Finished." }, { type: "done" }]);
+  });
+
+  it("allows an unlimited run to be stopped", async () => {
+    const controller = new AbortController();
+    let requests = 0;
+    const provider: LiteAgentProvider = {
+      stream: () => {
+        requests += 1;
+        return collectAsync([{ type: "tool_call", id: String(requests), name: "read", arguments: {} }]);
+      }
+    };
+    const tools = new LiteAgentToolRegistry();
+    tools.register({
+      name: "read", description: "Read a file", parameters: { type: "object", properties: {} },
+      mutates: false, execute: async () => {
+        if (requests === 8) controller.abort();
+        return { ok: true, value: "content" };
+      }
+    });
+    const events = await collect(new LiteAgentRuntime(provider, tools).run("Read files", { signal: controller.signal }));
+    expect(requests).toBe(8);
+    expect(events.some((event) => event.type === "error")).toBe(false);
+  });
+
+  it.each([6, 7, 25])("honors a configured limit of %i across sequential file operations", async (maxSteps) => {
+    let requests = 0;
+    const written: string[] = [];
+    const tools = new LiteAgentToolRegistry();
+    tools.register({
+      name: "vault_write",
+      description: "Write a note",
+      parameters: { type: "object", properties: {} },
+      mutates: true,
+      execute: async (args) => {
+        written.push(String(args.path));
+        return { ok: true, value: "written" };
+      }
+    });
+    const provider: LiteAgentProvider = {
+      stream: () => {
+        requests += 1;
+        return collectAsync(requests <= 6
+          ? [{ type: "tool_call", id: String(requests), name: "vault_write", arguments: { path: `${requests}.md` } }]
+          : [{ type: "text", text: "All files updated." }]);
+      }
+    };
+    const events = await collect(new LiteAgentRuntime(provider, tools).run("Update six files", {
+      maxSteps,
+      approveTool: async () => true
+    }));
+    expect(written).toEqual(["1.md", "2.md", "3.md", "4.md", "5.md", "6.md"]);
+    expect(requests).toBe(Math.min(maxSteps, 7));
+    if (maxSteps === 6) {
+      expect(events.at(-2)).toMatchObject({
+        type: "error", code: "step_limit",
+        message: expect.stringContaining("Completed operations remain in effect")
+      });
+    } else {
+      expect(events.some((event) => event.type === "error")).toBe(false);
+      expect(events.at(-2)).toEqual({ type: "text", text: "All files updated." });
+    }
+    expect(events.at(-1)).toEqual({ type: "done" });
+  });
+
   it("executes a tool call and continues with the tool result", async () => {
     const requests: LiteAgentProviderRequest[] = [];
     const provider: LiteAgentProvider = {

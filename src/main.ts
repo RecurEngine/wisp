@@ -37,6 +37,7 @@ export default class WispPlugin extends Plugin {
         new WispView(leaf, {
           createRuntime: () => this.createRuntime(),
           requestToolApproval: (toolName, args) => this.requestToolApproval(toolName, args),
+          getMaxSteps: () => this.wispSettings.maxSteps,
           isDebugMode: () => this.wispSettings.debugMode,
           mobileLayout: this.wispSettings.mobileLayout,
           createTranscriptionProvider: () => this.createTranscriptionProvider(),

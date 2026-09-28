@@ -8,7 +8,7 @@ import type {
 } from "./LiteAgentTypes";
 import { LiteAgentToolRegistry } from "./LiteAgentToolRegistry";
 
-const DEFAULT_MAX_STEPS = 6;
+export const DEFAULT_MAX_STEPS = 0;
 
 export interface LiteAgentRunOptions {
   readonly history?: readonly LiteAgentMessage[];
@@ -38,7 +38,7 @@ export class LiteAgentRuntime {
     messages.push({ role: "user", content: input, ...(attachments.length > 0 ? { attachments } : {}) });
 
     const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
-    for (let step = 0; step < maxSteps; step += 1) {
+    for (let step = 0; maxSteps === 0 || step < maxSteps; step += 1) {
       if (options.signal?.aborted) return;
 
       const assistantText: string[] = [];
@@ -117,7 +117,7 @@ export class LiteAgentRuntime {
       }
     }
 
-    yield { type: "error", message: "The agent reached its step limit." };
+    yield { type: "error", code: "step_limit", message: "The agent reached its step limit. Completed operations remain in effect. You can increase the maximum steps in Wisp settings." };
     yield { type: "done" };
   }
 }

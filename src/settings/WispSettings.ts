@@ -5,6 +5,8 @@ import type { WispVoiceProvider } from "../voice/VoiceProviderRegistry";
 import type { WebSearchProviderId } from "../websearch/WebSearchTypes";
 import { I18n, type TranslationKey, type WispLanguage } from "../i18n/I18n";
 
+import { DEFAULT_MAX_STEPS } from "../core/LiteAgentRuntime";
+
 const API_KEY_SECRET_ID = "wisp-api-key";
 const VOICE_API_KEY_SECRET_ID = "wisp-voice-api-key";
 const WEB_SEARCH_API_KEY_SECRET_ID = "wisp-web-search-api-key";
@@ -17,6 +19,7 @@ export interface WispSettings {
   readonly model: string;
   readonly apiKey: string;
   readonly systemPrompt: string;
+  readonly maxSteps: number;
   readonly debugMode: boolean;
   readonly voiceEnabled: boolean;
   readonly webSearchEnabled: boolean;
@@ -51,6 +54,7 @@ interface PersistedWispSettings {
   readonly baseUrl?: unknown;
   readonly model?: unknown;
   readonly systemPrompt?: unknown;
+  readonly maxSteps?: unknown;
   readonly debugMode?: unknown;
   readonly voiceEnabled?: unknown;
   readonly webSearchEnabled?: unknown;
@@ -70,6 +74,7 @@ export const DEFAULT_WISP_SETTINGS: WispSettings = {
   model: "claude-sonnet-4-20250514",
   apiKey: "",
   systemPrompt: "",
+  maxSteps: DEFAULT_MAX_STEPS,
   debugMode: false,
   voiceEnabled: true,
   webSearchEnabled: false,
@@ -103,6 +108,7 @@ export class WispSettingsStore {
       model: readString(persisted?.model, provider === "claude" ? DEFAULT_WISP_SETTINGS.model : "gpt-4o-mini"),
       apiKey: this.plugin.app.secretStorage.getSecret(API_KEY_SECRET_ID) ?? "",
       systemPrompt: readString(persisted?.systemPrompt, DEFAULT_WISP_SETTINGS.systemPrompt),
+      maxSteps: readInteger(persisted?.maxSteps, DEFAULT_MAX_STEPS, 0, 100),
       debugMode: readBoolean(persisted?.debugMode, DEFAULT_WISP_SETTINGS.debugMode),
       voiceEnabled: readBoolean(persisted?.voiceEnabled, DEFAULT_WISP_SETTINGS.voiceEnabled),
       webSearchEnabled: readBoolean(persisted?.webSearchEnabled, DEFAULT_WISP_SETTINGS.webSearchEnabled),
@@ -128,6 +134,7 @@ export class WispSettingsStore {
       baseUrl: settings.baseUrl,
       model: settings.model,
       systemPrompt: settings.systemPrompt,
+      maxSteps: settings.maxSteps,
       debugMode: settings.debugMode,
       language: settings.language,
       mobileLayout: settings.mobileLayout,
@@ -212,6 +219,25 @@ export class WispSettingTab extends PluginSettingTab {
         );
       this.addTextSetting(body, "settings.model", "settings.modelDesc", draft.model, (value) => this.updateDraft({ model: value.trim() }));
       this.addSecretSetting(body, "settings.apiKey", "settings.apiKeyDesc", draft.apiKey, (value) => this.updateDraft({ apiKey: value }));
+      new Setting(body)
+        .setName(this.t("settings.maxSteps"))
+        .setDesc(this.t("settings.maxStepsDesc"))
+        .addText((text) => {
+          text.inputEl.type = "number";
+          text.inputEl.min = "0";
+          text.inputEl.max = "100";
+          text.inputEl.step = "1";
+          text.setValue(String(draft.maxSteps)).onChange((value) => {
+            const parsed = Number(value);
+            const valid = value.trim() !== "" && Number.isInteger(parsed) && parsed >= 0 && parsed <= 100;
+            text.inputEl.setCustomValidity(valid ? "" : this.t("settings.maxStepsInvalid"));
+            if (valid) this.updateDraft({ maxSteps: parsed });
+          });
+          text.inputEl.addEventListener("blur", () => {
+            text.setValue(String(this.draft?.maxSteps ?? draft.maxSteps));
+            text.inputEl.setCustomValidity("");
+          });
+        });
       this.addAdvanced(body, (advanced) => {
         this.addTextSetting(advanced, "settings.baseUrl", "settings.chatBaseUrlDesc", draft.baseUrl, (value) => this.updateDraft({ baseUrl: value.trim() }));
         new Setting(advanced)

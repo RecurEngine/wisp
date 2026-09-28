@@ -93,5 +93,5 @@ export type LiteAgentRuntimeEvent =
     }
   | { readonly type: "tool_result"; readonly id: string; readonly name: string; readonly result: LiteAgentToolResult }
   | { readonly type: "status"; readonly text: string }
-  | { readonly type: "error"; readonly message: string; readonly details?: string }
+  | { readonly type: "error"; readonly message: string; readonly details?: string; readonly code?: "step_limit" }
   | { readonly type: "done" };

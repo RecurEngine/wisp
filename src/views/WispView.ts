@@ -19,6 +19,7 @@ export const VIEW_TYPE_WISP = "wisp-view";
 export interface WispViewDeps {
   readonly createRuntime: () => LiteAgentRuntime | null;
   readonly requestToolApproval: (toolName: string, args: unknown) => Promise<boolean>;
+  readonly getMaxSteps: () => number;
   readonly isDebugMode: () => boolean;
   readonly mobileLayout: "side" | "fullscreen";
   readonly createTranscriptionProvider: () => TranscriptionProvider | null;
@@ -557,6 +558,7 @@ export class WispView extends ItemView {
     let requestFailed = false;
     try {
       for await (const event of runtime.run(input, {
+        maxSteps: this.deps.getMaxSteps(),
         history: this.history,
         attachments,
         signal: controller.signal,
@@ -581,7 +583,7 @@ export class WispView extends ItemView {
           assistantBody.removeClass("is-loading");
           loadingIndicator.remove();
           assistantBody.setText("I couldn't complete that request.");
-          this.appendError(getUserFacingError(event.message), event.details);
+          this.appendError(event.code === "step_limit" ? this.t("view.stepLimit") : getUserFacingError(event.message), event.details);
         }
       }
       if (!controller.signal.aborted && !requestFailed) {
