@@ -479,7 +479,7 @@ function createDeleteNoteTool(app: App): LiteAgentToolDefinition {
       if (!safePath) return failure("path must stay inside the vault");
       const file = app.vault.getAbstractFileByPath(safePath);
       if (!(file instanceof TFile)) return failure(`Note not found: ${safePath}`);
-      await app.vault.trash(file, true);
+      await app.fileManager.trashFile(file);
       return success({ path: safePath, trashed: true });
     }
   };
