@@ -28,7 +28,7 @@ Not allowed in production code:
 1. `LiteAgentRuntime`: provider-neutral streaming events, tool loop, approval, and cancellation.
 2. `AgentCapabilities`: explicit support for vault access, writes, network, and audio.
 3. Provider adapters: browser-safe REST/streaming implementations for Claude Messages API and OpenAI-compatible APIs, kept outside the UI. Claude-compatible gateways receive both `x-api-key` and `Authorization: Bearer` using the same device-local secret.
-4. Vault tools: Obsidian-native read/search/write operations; every write requires explicit approval and delete is not exposed.
+4. Vault tools: Obsidian-native read/search/write operations; every write requires explicit approval, and delete moves files to the Obsidian trash.
 5. Secure settings: Obsidian SecretStorage for API keys; normal settings for non-secret configuration.
 6. Voice input: browser `MediaRecorder` produces a completed audio blob; provider-neutral transcription ports adapt OpenAI-compatible, Deepgram, and Alibaba DashScope REST APIs without adding SDK or Node.js dependencies.
 7. Web search: a provider-neutral `WebSearchProvider` returns bounded, normalized search results; `search_web` is registered only when the user enables it and configures a provider.
@@ -52,7 +52,7 @@ Completed:
 - Standalone mobile-first plugin project with a browser-safe production boundary.
 - Claude Messages API and OpenAI-compatible streaming providers.
 - Provider-neutral streaming tool loop with cancellation, write approval, and copyable debug errors.
-- Obsidian vault tools for listing, reading, searching, opening, current-note access, recent notes, metadata, links, create, append, update, and exact-match edit. Delete and rename remain intentionally unavailable until a safer confirmation flow is designed.
+- Obsidian vault tools for listing, reading, searching, opening, current-note access, recent notes, metadata, links, create, append, update, exact-match edit, and trash-based delete. Rename remains intentionally unavailable until a safer confirmation flow is designed. Write approval offers an "approve all in this message" option to avoid re-approving each operation.
 - Persisted multi-session conversations with browser-style tabs, automatic titles, creation, deletion, history clearing, and touch-friendly reordering.
 - Voice input through `MediaRecorder`, with OpenAI-compatible, Deepgram, and Alibaba DashScope transcription providers. Transcripts are inserted into the composer for review.
 - Web Search option B with Tavily and Brave adapters using Obsidian `requestUrl`, independent SecretStorage credentials, bounded results, and a read-only `search_web` tool.

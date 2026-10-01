@@ -178,6 +178,7 @@ const english = {
   "modal.modifyVault": "{tool} wants to modify your vault.",
   "modal.cancel": "Cancel",
   "modal.approve": "Approve",
+  "modal.approveAll": "Approve all in this message",
   "command.open": "Open Wisp"
 } as const;
 
@@ -359,6 +360,7 @@ const chinese: Record<keyof typeof english, string> = {
   "modal.modifyVault": "{tool} 想要修改你的 Vault。",
   "modal.cancel": "取消",
   "modal.approve": "批准",
+  "modal.approveAll": "本次全部批准",
   "command.open": "打开 Wisp"
 };
 

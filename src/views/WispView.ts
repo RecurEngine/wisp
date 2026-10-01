@@ -14,12 +14,13 @@ import { SessionDeleteModal } from "./SessionDeleteModal";
 import { SessionRenameModal } from "./SessionRenameModal";
 import { createImageAttachment, importImage, isImageFile, pickImages, releaseImagePreview, type ImageFile } from "../images/ImageImporter";
 import type { LiteAgentImageAttachment } from "../core/LiteAgentTypes";
+import type { ToolApprovalDecision } from "./ToolApprovalModal";
 
 export const VIEW_TYPE_WISP = "wisp-view";
 
 export interface WispViewDeps {
   readonly createRuntime: () => LiteAgentRuntime | null;
-  readonly requestToolApproval: (toolName: string, args: unknown, signal?: AbortSignal) => Promise<boolean>;
+  readonly requestToolApproval: (toolName: string, args: unknown, signal?: AbortSignal) => Promise<ToolApprovalDecision>;
   readonly getMaxSteps: () => number;
   readonly isDebugMode: () => boolean;
   readonly mobileLayout: "side" | "fullscreen";
@@ -61,6 +62,7 @@ export class WispView extends ItemView {
   private dragLongPressTimer?: number;
   private dragStartX = 0;
   private suppressTabClickUntil = 0;
+  private approveAllForRun = false;
 
   constructor(leaf: WorkspaceLeaf, private readonly deps: WispViewDeps) {
     super(leaf);
@@ -589,6 +591,7 @@ export class WispView extends ItemView {
     let finishRun!: () => void;
     this.activeRunFinished = new Promise<void>((resolve) => { finishRun = resolve; });
     this.setBusy(true);
+    this.approveAllForRun = false;
 
     let answer = "";
     let requestFailed = false;
@@ -603,7 +606,7 @@ export class WispView extends ItemView {
         history: this.deps.sessionStore.conversationHistory(sessionId),
         attachments,
         signal: controller.signal,
-        approveTool: (toolName, args) => this.deps.requestToolApproval(toolName, args, controller.signal)
+        approveTool: (toolName, args) => this.approveTool(toolName, args, controller.signal)
       })) {
         if (event.type === "text") {
           answer += event.text;
@@ -646,6 +649,13 @@ export class WispView extends ItemView {
       finishRun();
       this.activeRunFinished = undefined;
     }
+  }
+
+  private async approveTool(toolName: string, args: unknown, signal: AbortSignal): Promise<boolean> {
+    if (this.approveAllForRun) return true;
+    const decision = await this.deps.requestToolApproval(toolName, args, signal);
+    if (decision === "approve-all") this.approveAllForRun = true;
+    return decision !== "reject";
   }
 
   private async toggleRecording(): Promise<void> {

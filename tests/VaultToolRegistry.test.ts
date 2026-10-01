@@ -90,7 +90,8 @@ describe("VaultToolRegistry", () => {
       "append_note",
       "update_note",
       "edit_note",
-      "insert_image_into_note"
+      "insert_image_into_note",
+      "delete_note"
     ]);
   });
 
@@ -209,5 +210,27 @@ describe("VaultToolRegistry", () => {
 
     expect(result).toEqual({ ok: true, value: { imagePath: image.path, notePath: note.path, inserted: true } });
     expect(modify).toHaveBeenCalledWith(note, "Existing note\n![[photo.jpg]]");
+  });
+
+  it("moves a note to the Obsidian trash", async () => {
+    const file = Object.assign(new TFile(), { path: "Notes/idea.md" });
+    const trash = vi.fn().mockResolvedValue(undefined);
+    const app = { vault: { getAbstractFileByPath: vi.fn().mockReturnValue(file), trash } };
+
+    const tool = createVaultToolRegistry(app as never).get("delete_note");
+    const result = await tool?.execute({ path: "Notes/idea.md" });
+
+    expect(result).toEqual({ ok: true, value: { path: "Notes/idea.md", trashed: true } });
+    expect(trash).toHaveBeenCalledWith(file, true);
+  });
+
+  it("refuses to delete a missing note or a path that escapes the vault", async () => {
+    const app = { vault: { getAbstractFileByPath: vi.fn().mockReturnValue(null), trash: vi.fn() } };
+    const tool = createVaultToolRegistry(app as never).get("delete_note")!;
+
+    expect(await tool.execute({ path: "Missing.md" })).toEqual({ ok: false, error: "Note not found: Missing.md" });
+    expect(await tool.execute({ path: "../escape.md" })).toEqual({ ok: false, error: "path must stay inside the vault" });
+    expect(await tool.execute({ path: "" })).toEqual({ ok: false, error: "path must be a non-empty string" });
+    expect(app.vault.trash).not.toHaveBeenCalled();
   });
 });
