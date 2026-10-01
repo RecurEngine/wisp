@@ -1,20 +1,22 @@
 import { App, Modal } from "obsidian";
 import type { I18n } from "../i18n/I18n";
 
+export type ToolApprovalDecision = "approve" | "approve-all" | "reject";
+
 export class ToolApprovalModal extends Modal {
   private settled = false;
   private removeAbortListener?: () => void;
-  private resolveApproval?: (approved: boolean) => void;
+  private resolveApproval?: (decision: ToolApprovalDecision) => void;
 
   constructor(app: App, private readonly toolName: string, private readonly args: unknown, private readonly i18n: I18n) {
     super(app);
   }
 
-  openAndWait(signal?: AbortSignal): Promise<boolean> {
-    if (signal?.aborted) return Promise.resolve(false);
+  openAndWait(signal?: AbortSignal): Promise<ToolApprovalDecision> {
+    if (signal?.aborted) return Promise.resolve("reject");
     return new Promise((resolve) => {
       this.resolveApproval = resolve;
-      const onAbort = () => this.finish(false);
+      const onAbort = () => this.finish("reject");
       signal?.addEventListener("abort", onAbort, { once: true });
       this.removeAbortListener = () => signal?.removeEventListener("abort", onAbort);
       this.open();
@@ -30,20 +32,22 @@ export class ToolApprovalModal extends Modal {
 
     const buttons = contentEl.createDiv({ cls: "wisp-approval-buttons" });
     const cancelButton = buttons.createEl("button", { text: this.i18n.t("modal.cancel") });
+    const approveAllButton = buttons.createEl("button", { text: this.i18n.t("modal.approveAll") });
     const approveButton = buttons.createEl("button", { cls: "mod-cta", text: this.i18n.t("modal.approve") });
-    cancelButton.addEventListener("click", () => this.finish(false));
-    approveButton.addEventListener("click", () => this.finish(true));
+    cancelButton.addEventListener("click", () => this.finish("reject"));
+    approveAllButton.addEventListener("click", () => this.finish("approve-all"));
+    approveButton.addEventListener("click", () => this.finish("approve"));
   }
 
   onClose(): void {
-    this.finish(false);
+    this.finish("reject");
   }
 
-  private finish(approved: boolean): void {
+  private finish(decision: ToolApprovalDecision): void {
     if (this.settled) return;
     this.settled = true;
     this.removeAbortListener?.();
-    this.resolveApproval?.(approved);
+    this.resolveApproval?.(decision);
     this.resolveApproval = undefined;
     this.close();
   }

@@ -2,10 +2,11 @@ import { Platform, Plugin, WorkspaceLeaf } from "obsidian";
 import { LiteAgentRuntime } from "./core/LiteAgentRuntime";
 import { LiteAgentToolRegistry } from "./core/LiteAgentToolRegistry";
 import { createVaultToolRegistry } from "./tools/VaultToolRegistry";
+import { createCurrentTimeTool } from "./tools/CurrentTimeTool";
 import { OpenAiCompatibleProvider } from "./providers/OpenAiCompatibleProvider";
 import { ClaudeProvider } from "./providers/ClaudeProvider";
 import { WispSettingTab, WispSettingsStore, type WispSettings } from "./settings/WispSettings";
-import { ToolApprovalModal } from "./views/ToolApprovalModal";
+import { ToolApprovalModal, type ToolApprovalDecision } from "./views/ToolApprovalModal";
 import { VIEW_TYPE_WISP, WispView } from "./views/WispView";
 import { createTranscriptionProvider } from "./voice/VoiceProviderRegistry";
 import type { TranscriptionProvider } from "./voice/VoiceTypes";
@@ -94,6 +95,7 @@ export default class WispPlugin extends Plugin {
         });
     const tools = new LiteAgentToolRegistry();
     tools.registerAll(this.vaultTools.list());
+    tools.register(createCurrentTimeTool());
     const webSearchProvider = this.wispSettings.webSearchEnabled
       ? createWebSearchProvider({
           provider: this.wispSettings.webSearchProvider,
@@ -110,6 +112,8 @@ export default class WispPlugin extends Plugin {
       "When an image attachment is present, use its exact Vault path from the attachment metadata. If the user asks to insert it into a note, call insert_image_into_note and wait for the tool result before claiming success. A model does not need image vision capability to insert the attachment.",
       "Do not claim to have changed a note unless a write tool reports success.",
       "Before replacing a whole note with update_note, read it and pass its exact original content as expectedContent. On a write conflict, read again and reconsider the edit; never blindly overwrite it.",
+      "To delete a note, call delete_note with its exact vault path; it moves the file to the Obsidian trash and is recoverable.",
+      "Use get_current_time for the real current date and time whenever writing or editing content that references the current date, time, or recency. Never infer today's date from earlier conversation turns or your training data, because a conversation can span multiple days.",
       ...(webSearchProvider
         ? [
             "Use search_web for current or public-web information when it would improve the answer.",
@@ -131,7 +135,7 @@ export default class WispPlugin extends Plugin {
     return arrayBufferToBase64(await this.app.vault.readBinary(file));
   }
 
-  private requestToolApproval(toolName: string, args: unknown, signal?: AbortSignal): Promise<boolean> {
+  private requestToolApproval(toolName: string, args: unknown, signal?: AbortSignal): Promise<ToolApprovalDecision> {
     return new ToolApprovalModal(this.app, toolName, args, this.i18n).openAndWait(signal);
   }
 

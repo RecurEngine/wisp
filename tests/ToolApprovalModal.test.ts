@@ -16,7 +16,7 @@ describe("ToolApprovalModal", () => {
     const close = vi.spyOn(modal, "close");
     const approval = modal.openAndWait(controller.signal);
     controller.abort();
-    await expect(Promise.race([approval, Promise.resolve("still waiting")])).resolves.toBe(false);
+    await expect(Promise.race([approval, Promise.resolve("still waiting")])).resolves.toBe("reject");
     expect(close).toHaveBeenCalled();
   });
 });

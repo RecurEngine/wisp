@@ -20,7 +20,8 @@ export function createVaultToolRegistry(app: App): LiteAgentToolRegistry {
     createAppendNoteTool(app),
     createUpdateNoteTool(app),
     createEditNoteTool(app),
-    createInsertImageTool(app)
+    createInsertImageTool(app),
+    createDeleteNoteTool(app)
   ]);
   return registry;
 }
@@ -456,6 +457,30 @@ function createInsertImageTool(app: App): LiteAgentToolDefinition {
         return `${before}${separator}${embed}`;
       });
       return success({ imagePath: image.path, notePath: note.path, inserted: true });
+    }
+  };
+}
+
+function createDeleteNoteTool(app: App): LiteAgentToolDefinition {
+  return {
+    name: "delete_note",
+    description: "Move a vault note or attachment to the Obsidian trash. This is recoverable and never deletes folders.",
+    parameters: {
+      type: "object",
+      properties: { path: { type: "string", description: "Vault-relative path of the note or attachment to delete" } },
+      required: ["path"]
+    },
+    mutates: true,
+    async execute(args, signal): Promise<LiteAgentToolResult> {
+      signal?.throwIfAborted();
+      const path = readStringArg(args, "path");
+      if (!path) return failure("path must be a non-empty string");
+      const safePath = safeVaultPath(path);
+      if (!safePath) return failure("path must stay inside the vault");
+      const file = app.vault.getAbstractFileByPath(safePath);
+      if (!(file instanceof TFile)) return failure(`Note not found: ${safePath}`);
+      await app.vault.trash(file, true);
+      return success({ path: safePath, trashed: true });
     }
   };
 }

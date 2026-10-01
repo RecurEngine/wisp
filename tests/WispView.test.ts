@@ -30,7 +30,7 @@ async function openView(store: SessionStore, runtime: LiteAgentRuntime) {
   root.append(document.createElement("div"), document.createElement("div"));
   document.body.append(root);
   const view = new WispView({ containerEl: root } as never, {
-    createRuntime: () => runtime, getMaxSteps: () => 10, requestToolApproval: async () => true,
+    createRuntime: () => runtime, getMaxSteps: () => 10, requestToolApproval: async () => "approve",
     isDebugMode: () => false, mobileLayout: "side", createTranscriptionProvider: () => null,
     sessionStore: store, i18n: new I18n("en")
   });
@@ -109,5 +109,41 @@ describe("WispView recovery", () => {
     expect(store.active().runs).toHaveLength(1);
     expect(store.active().runs[0].operations[0].status).toBe("succeeded");
     expect(store.active().runs[0].status).toBe("stopped");
+  });
+
+  it("approves every remaining write after an approve-all decision without re-prompting", async () => {
+    const store = new SessionStore(storage() as never);
+    await store.load();
+    const executed: string[] = [];
+    const tools = new LiteAgentToolRegistry();
+    tools.register({ name: "write", description: "Write", parameters: { type: "object", properties: {} }, mutates: true,
+      execute: async (args) => { executed.push(String(args.path)); return { ok: true, value: "written" }; } });
+    let calls = 0;
+    const provider: LiteAgentProvider = { async *stream() {
+      calls += 1;
+      if (calls === 1) {
+        yield { type: "tool_call", id: "w1", name: "write", arguments: { path: "a.md" } };
+        yield { type: "tool_call", id: "w2", name: "write", arguments: { path: "b.md" } };
+        yield { type: "done", finishReason: "tool_calls" };
+      } else {
+        yield { type: "text", text: "Done." };
+        yield { type: "done", finishReason: "stop" };
+      }
+    } };
+    let approvals = 0;
+    const root = document.createElement("div");
+    root.append(document.createElement("div"), document.createElement("div"));
+    document.body.append(root);
+    const view = new WispView({ containerEl: root } as never, {
+      createRuntime: () => new LiteAgentRuntime(provider, tools), getMaxSteps: () => 10,
+      requestToolApproval: async () => { approvals += 1; return "approve-all"; },
+      isDebugMode: () => false, mobileLayout: "side", createTranscriptionProvider: () => null,
+      sessionStore: store, i18n: new I18n("en")
+    });
+    views.push(view);
+    await view.onOpen();
+    send(root, "Write both");
+    await vi.waitFor(() => expect(executed).toEqual(["a.md", "b.md"]));
+    expect(approvals).toBe(1);
   });
 });
