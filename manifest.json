@@ -1,7 +1,7 @@
 {
   "id": "wisp",
   "name": "Wisp",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "minAppVersion": "1.13.0",
   "description": "A small intelligence that follows you everywhere, for managing your vault.",
   "author": "RecurEngine",
